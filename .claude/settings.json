@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(pip install:*)",
+      "Bash(pip install -e:*)",
+      "Bash(ruff:*)",
+      "Bash(mypy:*)",
+      "Bash(hatch:*)",
+      "Bash(git:*)",
+      "Bash(pre-commit:*)",
+      "Bash(python:*)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(touch:*)",
+      "Read",
+      "Edit",
+      "Write"
+    ]
+  }
+}

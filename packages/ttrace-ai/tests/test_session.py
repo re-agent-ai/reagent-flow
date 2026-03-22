@@ -1,0 +1,102 @@
+"""Tests for ttrace_ai session and recorder."""
+
+import pytest
+import ttrace_ai
+from ttrace_ai._context import get_active_session
+from ttrace_ai.exceptions import AmbiguousToolCallError, SessionClosedError
+
+
+def test_session_sets_contextvar() -> None:
+    assert get_active_session() is None
+    with ttrace_ai.session("test") as s:
+        assert get_active_session() is s
+    assert get_active_session() is None
+
+
+def test_session_log_llm_call() -> None:
+    with ttrace_ai.session("test") as s:
+        call_ids = s.log_llm_call(
+            response_text=None,
+            tool_calls=[{"name": "lookup", "arguments": {"id": "1"}}],
+        )
+    assert len(call_ids) == 1
+    assert len(s.trace.turns) == 1
+    assert s.trace.turns[0].llm_call.tool_calls[0].name == "lookup"
+
+
+def test_session_log_tool_result() -> None:
+    with ttrace_ai.session("test") as s:
+        s.log_llm_call(
+            response_text=None,
+            tool_calls=[{"name": "lookup", "arguments": {"id": "1"}}],
+        )
+        s.log_tool_result("lookup", result={"found": True}, duration_ms=50.0)
+    assert len(s.trace.turns[0].tool_results) == 1
+    assert s.trace.turns[0].tool_results[0].result == {"found": True}
+
+
+def test_session_log_tool_result_by_call_id() -> None:
+    with ttrace_ai.session("test") as s:
+        ids = s.log_llm_call(
+            tool_calls=[
+                {"name": "lookup", "arguments": {"id": "1"}},
+                {"name": "lookup", "arguments": {"id": "2"}},
+            ],
+        )
+        s.log_tool_result("lookup", call_id=ids[0], result={"id": "1"})
+        s.log_tool_result("lookup", call_id=ids[1], result={"id": "2"})
+    results = s.trace.turns[0].tool_results
+    assert results[0].result == {"id": "1"}
+    assert results[1].result == {"id": "2"}
+
+
+def test_session_ambiguous_tool_call_error() -> None:
+    with ttrace_ai.session("test") as s:
+        s.log_llm_call(
+            tool_calls=[
+                {"name": "lookup", "arguments": {"id": "1"}},
+                {"name": "lookup", "arguments": {"id": "2"}},
+            ],
+        )
+        with pytest.raises(AmbiguousToolCallError):
+            s.log_tool_result("lookup", result={"found": True})
+
+
+def test_session_closed_error() -> None:
+    with ttrace_ai.session("test") as s:
+        pass
+    with pytest.raises(SessionClosedError):
+        s.log_llm_call(response_text="hello", tool_calls=[])
+
+
+def test_session_text_only_turn() -> None:
+    with ttrace_ai.session("test") as s:
+        s.log_llm_call(response_text="I can help with that", tool_calls=[])
+    assert s.trace.turns[0].llm_call.response_text == "I can help with that"
+    assert s.trace.turns[0].llm_call.tool_calls == []
+
+
+def test_session_multiple_turns() -> None:
+    with ttrace_ai.session("test") as s:
+        s.log_llm_call(tool_calls=[{"name": "a", "arguments": {}}])
+        s.log_tool_result("a", result="ok")
+        s.log_llm_call(tool_calls=[{"name": "b", "arguments": {}}])
+        s.log_tool_result("b", result="ok")
+        s.log_llm_call(response_text="done", tool_calls=[])
+    assert len(s.trace.turns) == 3
+
+
+def test_session_trace_metadata() -> None:
+    with ttrace_ai.session("test", metadata={"env": "ci"}) as s:
+        pass
+    assert s.trace.metadata == {"env": "ci"}
+
+
+def test_session_assert_called_inside_active_session() -> None:
+    """Assertions should work while the session is still active."""
+    with ttrace_ai.session("test") as s:
+        s.log_llm_call(tool_calls=[{"name": "lookup", "arguments": {}}])
+        s.log_tool_result("lookup", result="ok")
+        s.assert_called("lookup")
+        s.assert_never_called("delete")
+        s.assert_max_turns(5)
