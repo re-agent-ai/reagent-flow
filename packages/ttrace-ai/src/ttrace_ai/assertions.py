@@ -85,9 +85,7 @@ def assert_tool_succeeded(trace: Trace, tool_name: str) -> None:
         for tc in turn.llm_call.tool_calls:
             if tc.name == tool_name:
                 found = True
-                matching_results = [
-                    tr for tr in turn.tool_results if tr.call_id == tc.call_id
-                ]
+                matching_results = [tr for tr in turn.tool_results if tr.call_id == tc.call_id]
                 if not matching_results:
                     raise _assertion_error(
                         trace,

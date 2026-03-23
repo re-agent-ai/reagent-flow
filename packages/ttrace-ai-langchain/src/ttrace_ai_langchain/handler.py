@@ -44,17 +44,21 @@ class TTraceCallbackHandler:
                 raw_tool_calls = getattr(message, "tool_calls", None) or []
                 for tc in raw_tool_calls:
                     if isinstance(tc, dict):
-                        tool_calls_data.append({
-                            "name": tc.get("name", "unknown"),
-                            "arguments": tc.get("args", {}),
-                            "call_id": tc.get("id", str(run_id)),
-                        })
+                        tool_calls_data.append(
+                            {
+                                "name": tc.get("name", "unknown"),
+                                "arguments": tc.get("args", {}),
+                                "call_id": tc.get("id", str(run_id)),
+                            }
+                        )
                     else:
-                        tool_calls_data.append({
-                            "name": getattr(tc, "name", "unknown"),
-                            "arguments": getattr(tc, "args", {}),
-                            "call_id": getattr(tc, "id", str(run_id)),
-                        })
+                        tool_calls_data.append(
+                            {
+                                "name": getattr(tc, "name", "unknown"),
+                                "arguments": getattr(tc, "args", {}),
+                                "call_id": getattr(tc, "id", str(run_id)),
+                            }
+                        )
 
             returned_ids = session.log_llm_call(
                 response_text=text,
@@ -64,9 +68,7 @@ class TTraceCallbackHandler:
             self._call_id_index = 0
         except Exception as e:
             warnings.warn(
-                TTraceAdapterWarning(
-                    f"Failed to capture LangChain LLM response: {e}"
-                ),
+                TTraceAdapterWarning(f"Failed to capture LangChain LLM response: {e}"),
                 stacklevel=2,
             )
 
@@ -97,9 +99,7 @@ class TTraceCallbackHandler:
             session.log_tool_result(name, result=output, call_id=call_id)
         except Exception as e:
             warnings.warn(
-                TTraceAdapterWarning(
-                    f"Failed to capture LangChain tool result: {e}"
-                ),
+                TTraceAdapterWarning(f"Failed to capture LangChain tool result: {e}"),
                 stacklevel=2,
             )
 
@@ -122,8 +122,6 @@ class TTraceCallbackHandler:
             session.log_tool_result(name, error=str(error), call_id=call_id)
         except Exception as e:
             warnings.warn(
-                TTraceAdapterWarning(
-                    f"Failed to capture LangChain tool error: {e}"
-                ),
+                TTraceAdapterWarning(f"Failed to capture LangChain tool error: {e}"),
                 stacklevel=2,
             )

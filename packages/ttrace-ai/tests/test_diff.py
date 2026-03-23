@@ -1,6 +1,5 @@
 """Tests for golden baseline diff engine."""
 
-
 from ttrace_ai.diff import TurnDiff, diff_traces
 from ttrace_ai.models import LLMCall, ToolCall, ToolResult, Trace, Turn
 

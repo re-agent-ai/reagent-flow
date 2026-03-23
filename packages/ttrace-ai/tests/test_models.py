@@ -55,13 +55,9 @@ def test_trace_serialization_roundtrip() -> None:
     tc = ToolCall(name="lookup", arguments={"id": "1"}, call_id="c1", timestamp=1.0)
     tr_result = ToolResult(call_id="c1", result={"found": True}, duration_ms=50.0)
     msg = Message(role="user", content="test")
-    lc = LLMCall(
-        messages=[msg], response_text=None, tool_calls=[tc], model="gpt-4o", timestamp=1.0
-    )
+    lc = LLMCall(messages=[msg], response_text=None, tool_calls=[tc], model="gpt-4o", timestamp=1.0)
     turn = Turn(index=0, llm_call=lc, tool_results=[tr_result], duration_ms=100.0)
-    trace = Trace(
-        trace_id="t1", name="test_roundtrip", turns=[turn], started_at=1.0, ended_at=2.0
-    )
+    trace = Trace(trace_id="t1", name="test_roundtrip", turns=[turn], started_at=1.0, ended_at=2.0)
 
     from ttrace_ai.models import trace_from_dict, trace_to_dict
 

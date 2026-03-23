@@ -65,9 +65,7 @@ class DiffResult:
                         f"  Turn {td.turn_index}: MISSING (expected {td.tool_name_expected})"
                     )
                 elif td.extra:
-                    lines.append(
-                        f"  Turn {td.turn_index}: EXTRA (got {td.tool_name_actual})"
-                    )
+                    lines.append(f"  Turn {td.turn_index}: EXTRA (got {td.tool_name_actual})")
                 elif not td.tool_name_match:
                     lines.append(
                         f"  Turn {td.turn_index}: tool mismatch "
@@ -78,9 +76,7 @@ class DiffResult:
                     for key, (exp, act) in td.argument_diffs.items():
                         lines.append(f"    {key}: expected={exp!r}, actual={act!r}")
                 elif not td.result_match:
-                    lines.append(
-                        f"  Turn {td.turn_index}: result mismatch"
-                    )
+                    lines.append(f"  Turn {td.turn_index}: result mismatch")
         return "\n".join(lines)
 
 
@@ -101,9 +97,7 @@ def diff_traces(golden: Trace, actual: Trace) -> DiffResult:
 
         if g_turn is None and a_turn is not None:
             g_name = _primary_tool(a_turn)
-            result.turn_diffs.append(
-                TurnDiff(turn_index=i, tool_name_actual=g_name, extra=True)
-            )
+            result.turn_diffs.append(TurnDiff(turn_index=i, tool_name_actual=g_name, extra=True))
             continue
 
         if a_turn is None and g_turn is not None:
@@ -113,7 +107,8 @@ def diff_traces(golden: Trace, actual: Trace) -> DiffResult:
             )
             continue
 
-        assert g_turn is not None and a_turn is not None
+        if g_turn is None or a_turn is None:  # pragma: no cover
+            continue
         td = _diff_turn(i, g_turn, a_turn)
         result.turn_diffs.append(td)
 

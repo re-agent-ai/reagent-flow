@@ -8,7 +8,8 @@ def _make_3turn_trace() -> Trace:
     t0 = Turn(
         index=0,
         llm_call=LLMCall(
-            messages=None, response_text=None,
+            messages=None,
+            response_text=None,
             tool_calls=[
                 ToolCall(name="lookup_order", arguments={"id": "123"}, call_id="c0", timestamp=1.0),
             ],
@@ -20,7 +21,8 @@ def _make_3turn_trace() -> Trace:
     t1 = Turn(
         index=1,
         llm_call=LLMCall(
-            messages=None, response_text=None,
+            messages=None,
+            response_text=None,
             tool_calls=[
                 ToolCall(name="check_policy", arguments={"id": "123"}, call_id="c1", timestamp=2.0),
             ],
@@ -32,15 +34,20 @@ def _make_3turn_trace() -> Trace:
     t2 = Turn(
         index=2,
         llm_call=LLMCall(
-            messages=None, response_text="Cannot process refund.", tool_calls=[],
+            messages=None,
+            response_text="Cannot process refund.",
+            tool_calls=[],
             timestamp=3.0,
         ),
         tool_results=[],
         duration_ms=40,
     )
     return Trace(
-        trace_id="t1", name="test_refund", turns=[t0, t1, t2],
-        started_at=1.0, ended_at=4.0,
+        trace_id="t1",
+        name="test_refund",
+        turns=[t0, t1, t2],
+        started_at=1.0,
+        ended_at=4.0,
     )
 
 
@@ -75,7 +82,8 @@ def test_format_stack_trace_tool_error() -> None:
     t0 = Turn(
         index=0,
         llm_call=LLMCall(
-            messages=None, response_text=None,
+            messages=None,
+            response_text=None,
             tool_calls=[ToolCall(name="lookup", arguments={}, call_id="c0", timestamp=1.0)],
             timestamp=1.0,
         ),
@@ -85,7 +93,10 @@ def test_format_stack_trace_tool_error() -> None:
     t1 = Turn(
         index=1,
         llm_call=LLMCall(
-            messages=None, response_text="Sorry, failed.", tool_calls=[], timestamp=2.0,
+            messages=None,
+            response_text="Sorry, failed.",
+            tool_calls=[],
+            timestamp=2.0,
         ),
         tool_results=[],
         duration_ms=30,

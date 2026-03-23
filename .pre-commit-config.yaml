@@ -1,0 +1,25 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: bash -c 'mypy packages/ttrace-ai/src/ttrace_ai/ packages/ttrace-ai-openai/src/ttrace_ai_openai/ packages/ttrace-ai-langchain/src/ttrace_ai_langchain/ packages/ttrace-ai-langgraph/src/ttrace_ai_langgraph/ packages/ttrace-ai-crewai/src/ttrace_ai_crewai/ --strict'
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+
+      - id: pytest
+        name: pytest
+        entry: bash -c 'PYTHONPATH=packages/ttrace-ai/src:packages/ttrace-ai-openai/src:packages/ttrace-ai-langchain/src:packages/ttrace-ai-langgraph/src:packages/ttrace-ai-crewai/src python -m pytest packages/ examples/ -x -q'
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true

@@ -210,5 +210,8 @@ __marimo__/
 # ttrace-ai trace output
 .ttrace/
 
-#md files
-*.md
+# ttrace-ai spec/plan files
+2026-*.md
+ttrace-ai-production-practices.md
+AGENTS.md
+CLAUDE.md

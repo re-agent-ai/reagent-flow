@@ -41,8 +41,6 @@ class TTraceGraphTracer(TTraceCallbackHandler):
                 self._current_node = serialized["name"]
         except Exception as e:
             warnings.warn(
-                TTraceAdapterWarning(
-                    f"LangGraph node capture failed: {e}"
-                ),
+                TTraceAdapterWarning(f"LangGraph node capture failed: {e}"),
                 stacklevel=2,
             )

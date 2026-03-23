@@ -33,11 +33,13 @@ def patch(client: Any) -> Any:
                         arguments = json.loads(tc.function.arguments)
                     except (json.JSONDecodeError, AttributeError):
                         arguments = {}
-                    tool_calls_data.append({
-                        "name": tc.function.name,
-                        "arguments": arguments,
-                        "call_id": tc.id,
-                    })
+                    tool_calls_data.append(
+                        {
+                            "name": tc.function.name,
+                            "arguments": arguments,
+                            "call_id": tc.id,
+                        }
+                    )
 
             session.log_llm_call(
                 response_text=message.content,
