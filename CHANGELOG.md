@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-03-23
 
+### Changed
+
+- Renamed project from `ttrace-ai` to `reagent-ai` (`pip install reagent-ai`)
+- All imports changed: `ttrace_ai` → `reagent_ai`, adapters follow same pattern
+- Trace directory default changed: `.ttrace/` → `.reagent/`
+- CLI flags changed: `--ttrace-*` → `--reagent-*`
+- Exception classes renamed: `TTraceError` → `ReagentError`, `TTraceAdapterWarning` → `ReagentAdapterWarning`
+
 ### Added
 
 - Core library: session context manager, recorder, trace models
@@ -14,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent Stack Trace formatter with probable cause heuristics
 - Golden baseline diff engine for behavioral regression detection
 - JSON storage backend with `.trace.json` format
-- pytest plugin with `--ttrace-record`, `--ttrace-update`, `--ttrace-dir` flags
+- pytest plugin with `--reagent-record`, `--reagent-update`, `--reagent-dir` flags
 - OpenAI adapter (patch-based instrumentation)
 - LangChain adapter (callback handler with call_id tracking)
 - LangGraph adapter (extends LangChain with node tracking)

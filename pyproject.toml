@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ttrace-ai-workspace"
+name = "reagent-ai-workspace"
 version = "0.0.0"
 requires-python = ">=3.10"
 
@@ -45,7 +45,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["packages/ttrace-ai/src/ttrace_ai"]
+source = ["packages/reagent-ai/src/reagent_ai"]
 branch = true
 
 [tool.coverage.report]

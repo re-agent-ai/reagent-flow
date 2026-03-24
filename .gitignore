@@ -207,11 +207,11 @@ marimo/_lsp/
 __marimo__/
 
 
-# ttrace-ai trace output
-.ttrace/
+# reAgent trace output
+.reagent/
 
-# ttrace-ai spec/plan files
+# reAgent spec/plan files
 2026-*.md
-ttrace-ai-production-practices.md
+reagent-ai-production-practices.md
 AGENTS.md
 CLAUDE.md

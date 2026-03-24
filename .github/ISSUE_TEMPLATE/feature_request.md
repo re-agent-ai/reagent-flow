@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a feature for ttrace-ai
+about: Suggest a feature for reagent-ai
 title: "[FEATURE] "
 labels: enhancement
 ---

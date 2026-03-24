@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in ttrace-ai
+about: Report a bug in reagent-ai
 title: "[BUG] "
 labels: bug
 ---
@@ -26,6 +26,6 @@ What actually happened. Include error messages and stack traces if available.
 ## Environment
 
 - Python version:
-- ttrace-ai version:
+- reagent-ai version:
 - Framework adapter (if applicable):
 - OS:

@@ -1,27 +1,27 @@
 version: 2
 updates:
   - package-ecosystem: "pip"
-    directory: "/packages/ttrace-ai"
+    directory: "/packages/reagent-ai"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/packages/ttrace-ai-openai"
+    directory: "/packages/reagent-ai-openai"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/packages/ttrace-ai-langchain"
+    directory: "/packages/reagent-ai-langchain"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/packages/ttrace-ai-langgraph"
+    directory: "/packages/reagent-ai-langgraph"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/packages/ttrace-ai-crewai"
+    directory: "/packages/reagent-ai-crewai"
     schedule:
       interval: "weekly"
 

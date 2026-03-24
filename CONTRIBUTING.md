@@ -1,24 +1,24 @@
-# Contributing to ttrace-ai
+# Contributing to reagent-ai
 
 ## Development Setup
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-org/ttrace-ai.git
-cd ttrace-ai
+git clone https://github.com/your-org/reagent-ai.git
+cd reagent-ai
 
 # Create virtual environment
 python -m venv .venv
 source .venv/bin/activate
 
 # Install core in dev mode
-pip install -e "packages/ttrace-ai[dev]"
+pip install -e "packages/reagent-ai[dev]"
 
 # Install adapters
-pip install -e packages/ttrace-ai-openai
-pip install -e packages/ttrace-ai-langchain
-pip install -e packages/ttrace-ai-langgraph
-pip install -e packages/ttrace-ai-crewai
+pip install -e packages/reagent-ai-openai
+pip install -e packages/reagent-ai-langchain
+pip install -e packages/reagent-ai-langgraph
+pip install -e packages/reagent-ai-crewai
 
 # Install pre-commit hooks
 pip install pre-commit
@@ -29,7 +29,7 @@ pre-commit install
 
 ```bash
 # Core tests
-pytest packages/ttrace-ai/tests/ -v
+pytest packages/reagent-ai/tests/ -v
 
 # All tests
 pytest packages/ examples/ -v
@@ -49,7 +49,7 @@ ruff check packages/ examples/
 ruff format packages/ examples/
 
 # Type check
-mypy packages/ttrace-ai/src/ttrace_ai/ --strict
+mypy packages/reagent-ai/src/reagent_ai/ --strict
 ```
 
 ## Conventions
@@ -58,7 +58,7 @@ mypy packages/ttrace-ai/src/ttrace_ai/ --strict
 - **Types**: `mypy --strict` on all packages, `py.typed` marker (PEP 561)
 - **Docstrings**: All public APIs must have docstrings
 - **Tests**: No real LLM calls — adapters use mocks
-- **Exceptions**: Inherit from `TTraceError`; warnings use `TTraceWarning` / `TTraceAdapterWarning`
+- **Exceptions**: Inherit from `ReagentError`; warnings use `ReagentWarning` / `ReagentAdapterWarning`
 
 ## Pull Request Process
 

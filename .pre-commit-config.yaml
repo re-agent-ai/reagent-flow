@@ -10,7 +10,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: bash -c 'mypy packages/ttrace-ai/src/ttrace_ai/ packages/ttrace-ai-openai/src/ttrace_ai_openai/ packages/ttrace-ai-langchain/src/ttrace_ai_langchain/ packages/ttrace-ai-langgraph/src/ttrace_ai_langgraph/ packages/ttrace-ai-crewai/src/ttrace_ai_crewai/ --strict'
+        entry: bash -c 'mypy packages/reagent-ai/src/reagent_ai/ packages/reagent-ai-openai/src/reagent_ai_openai/ packages/reagent-ai-langchain/src/reagent_ai_langchain/ packages/reagent-ai-langgraph/src/reagent_ai_langgraph/ packages/reagent-ai-crewai/src/reagent_ai_crewai/ --strict'
         language: system
         types: [python]
         pass_filenames: false
@@ -18,7 +18,7 @@ repos:
 
       - id: pytest
         name: pytest
-        entry: bash -c 'PYTHONPATH=packages/ttrace-ai/src:packages/ttrace-ai-openai/src:packages/ttrace-ai-langchain/src:packages/ttrace-ai-langgraph/src:packages/ttrace-ai-crewai/src python -m pytest packages/ examples/ -x -q'
+        entry: bash -c 'PYTHONPATH=packages/reagent-ai/src:packages/reagent-ai-openai/src:packages/reagent-ai-langchain/src:packages/reagent-ai-langgraph/src:packages/reagent-ai-crewai/src python -m pytest packages/ examples/ -x -q'
         language: system
         types: [python]
         pass_filenames: false

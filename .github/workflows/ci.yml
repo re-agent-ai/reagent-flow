@@ -39,20 +39,20 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e packages/ttrace-ai
-          pip install -e packages/ttrace-ai-openai
-          pip install -e packages/ttrace-ai-langchain
-          pip install -e packages/ttrace-ai-langgraph
-          pip install -e packages/ttrace-ai-crewai
+          pip install -e packages/reagent-ai
+          pip install -e packages/reagent-ai-openai
+          pip install -e packages/reagent-ai-langchain
+          pip install -e packages/reagent-ai-langgraph
+          pip install -e packages/reagent-ai-crewai
           pip install mypy
 
       - name: Type check
         run: |
-          mypy packages/ttrace-ai/src/ttrace_ai/ --strict
-          mypy packages/ttrace-ai-openai/src/ttrace_ai_openai/ --strict
-          mypy packages/ttrace-ai-langchain/src/ttrace_ai_langchain/ --strict
-          mypy packages/ttrace-ai-langgraph/src/ttrace_ai_langgraph/ --strict
-          mypy packages/ttrace-ai-crewai/src/ttrace_ai_crewai/ --strict
+          mypy packages/reagent-ai/src/reagent_ai/ --strict
+          mypy packages/reagent-ai-openai/src/reagent_ai_openai/ --strict
+          mypy packages/reagent-ai-langchain/src/reagent_ai_langchain/ --strict
+          mypy packages/reagent-ai-langgraph/src/reagent_ai_langgraph/ --strict
+          mypy packages/reagent-ai-crewai/src/reagent_ai_crewai/ --strict
 
   test:
     runs-on: ubuntu-latest
@@ -71,11 +71,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e "packages/ttrace-ai[dev]"
-          pip install -e packages/ttrace-ai-openai
-          pip install -e packages/ttrace-ai-langchain
-          pip install -e packages/ttrace-ai-langgraph
-          pip install -e packages/ttrace-ai-crewai
+          pip install -e "packages/reagent-ai[dev]"
+          pip install -e packages/reagent-ai-openai
+          pip install -e packages/reagent-ai-langchain
+          pip install -e packages/reagent-ai-langgraph
+          pip install -e packages/reagent-ai-crewai
 
       - name: Test with coverage
         run: |
@@ -98,8 +98,8 @@ jobs:
 
       - name: Build packages
         run: |
-          (cd packages/ttrace-ai && hatch build)
-          (cd packages/ttrace-ai-openai && hatch build)
-          (cd packages/ttrace-ai-langchain && hatch build)
-          (cd packages/ttrace-ai-langgraph && hatch build)
-          (cd packages/ttrace-ai-crewai && hatch build)
+          (cd packages/reagent-ai && hatch build)
+          (cd packages/reagent-ai-openai && hatch build)
+          (cd packages/reagent-ai-langchain && hatch build)
+          (cd packages/reagent-ai-langgraph && hatch build)
+          (cd packages/reagent-ai-crewai && hatch build)
