@@ -3,9 +3,15 @@
 import json
 
 import pytest
-from reagent_ai.exceptions import TraceNotFoundError
+from reagent_ai.exceptions import ReagentError, TraceNotFoundError
 from reagent_ai.models import LLMCall, ToolCall, ToolResult, Trace, Turn
-from reagent_ai.storage.json import find_traces, load_golden, load_trace, save_trace
+from reagent_ai.storage.json import (
+    _sanitize_name,
+    find_traces,
+    load_golden,
+    load_trace,
+    save_trace,
+)
 
 
 def _make_trace(name: str = "test_trace") -> Trace:
@@ -63,3 +69,42 @@ def test_trace_file_is_valid_json(tmp_path: object) -> None:
         data = json.load(f)
     assert data["trace_id"] == "tid"
     assert data["format_version"] == "1"
+
+
+@pytest.mark.unit
+class TestSanitizeName:
+    """Tests for path traversal prevention in trace name sanitization."""
+
+    def test_path_traversal_blocked(self) -> None:
+        assert _sanitize_name("../../etc/passwd") == "etc_passwd"
+
+    def test_slashes_replaced(self) -> None:
+        assert _sanitize_name("foo/bar") == "foo_bar"
+
+    def test_backslashes_replaced(self) -> None:
+        assert _sanitize_name("foo\\bar") == "foo_bar"
+
+    def test_dots_stripped_from_edges(self) -> None:
+        assert _sanitize_name("..hidden..") == "hidden"
+
+    def test_normal_name_unchanged(self) -> None:
+        assert _sanitize_name("my_test_trace") == "my_test_trace"
+
+    def test_hyphens_preserved(self) -> None:
+        assert _sanitize_name("my-trace") == "my-trace"
+
+    def test_empty_after_sanitize_raises(self) -> None:
+        with pytest.raises(ReagentError, match="sanitizes to empty"):
+            _sanitize_name("///")
+
+    def test_spaces_replaced(self) -> None:
+        assert _sanitize_name("my trace") == "my_trace"
+
+
+@pytest.mark.unit
+def test_save_trace_with_malicious_name(tmp_path: object) -> None:
+    """Path traversal in trace.name must not escape the base directory."""
+    trace = _make_trace("../../escape_attempt")
+    path = save_trace(trace, str(tmp_path), golden=False)
+    # File must be inside the expected traces directory
+    assert str(tmp_path) in path

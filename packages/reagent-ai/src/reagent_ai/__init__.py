@@ -6,6 +6,7 @@ from reagent_ai.exceptions import (
     AmbiguousToolCallError,
     ReagentAdapterWarning,
     ReagentError,
+    ReagentWarning,
     SessionClosedError,
     TraceNotFoundError,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "SessionClosedError",
     "ReagentAdapterWarning",
     "ReagentError",
+    "ReagentWarning",
     "TraceNotFoundError",
     "__version__",
     "session",

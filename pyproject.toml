@@ -42,7 +42,9 @@ markers = [
     "unit: unit tests (default)",
     "integration: integration tests",
     "e2e: end-to-end tests",
+    "asyncio: async tests",
 ]
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 source = ["packages/reagent-ai/src/reagent_ai"]

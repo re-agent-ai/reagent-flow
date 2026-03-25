@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import time
 import uuid
+import warnings
 from typing import Any
 
-from reagent_ai.exceptions import AmbiguousToolCallError
+from reagent_ai.exceptions import AmbiguousToolCallError, ReagentWarning
 from reagent_ai.models import LLMCall, Message, ToolCall, ToolResult, Turn
 
 
@@ -72,6 +73,13 @@ class Recorder:
     ) -> None:
         """Record a tool result for the current turn."""
         if self._current_turn is None:
+            warnings.warn(
+                ReagentWarning(
+                    f"log_tool_result('{name}') called before any log_llm_call(); "
+                    "result will be dropped"
+                ),
+                stacklevel=2,
+            )
             return
 
         if call_id is None:

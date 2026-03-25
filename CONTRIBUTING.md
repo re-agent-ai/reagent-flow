@@ -4,7 +4,7 @@
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-org/reagent-ai.git
+git clone https://github.com/reagent-ai/reagent-ai.git
 cd reagent-ai
 
 # Create virtual environment

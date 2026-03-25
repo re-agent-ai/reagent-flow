@@ -117,14 +117,49 @@ class Session:
         self._sync_trace()
         assert_total_duration_under(self.trace, ms=ms)
 
-    def assert_matches_baseline(self, *, base_dir: str | None = None) -> None:
-        """Assert that the current trace matches its golden baseline."""
+    def assert_matches_baseline(
+        self,
+        *,
+        base_dir: str | None = None,
+        ignore_fields: set[str] | None = None,
+    ) -> None:
+        """Assert that the current trace matches its golden baseline.
+
+        Args:
+            base_dir: Override trace directory for loading the golden baseline.
+            ignore_fields: Set of field paths to ignore during comparison.
+                Supported: ``"arguments"``, ``"results"``, ``"response_text"``,
+                or specific keys like ``"tool_name.arg_key"``.
+
+        """
         from reagent_ai.diff import diff_traces
         from reagent_ai.storage.json import load_golden
 
         self._sync_trace()
         dir_path = base_dir or self._trace_dir
         golden = load_golden(dir_path, self.trace.name)
-        result = diff_traces(golden, self.trace)
+        result = diff_traces(golden, self.trace, ignore_fields=ignore_fields)
         if not result.is_match:
             raise AssertionError(f"Trace does not match golden baseline:\n{result.summary()}")
+
+    # -- Async context manager support --
+
+    async def __aenter__(self) -> Session:
+        """Enter an async session context."""
+        self._token = _active_session.set(self)
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
+        """Exit an async session context."""
+        self._sync_trace()
+        self.trace.ended_at = time.time()
+        self._closed = True
+        if self._token is not None:
+            _active_session.reset(self._token)
+            self._token = None
+        self._save()

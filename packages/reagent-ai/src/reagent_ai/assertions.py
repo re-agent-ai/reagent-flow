@@ -115,10 +115,15 @@ def assert_max_turns(trace: Trace, n: int) -> None:
 
 
 def assert_total_duration_under(trace: Trace, *, ms: float) -> None:
-    """Assert that total trace duration is under ms milliseconds."""
-    if trace.ended_at is None:
-        return
-    actual_ms = (trace.ended_at - trace.started_at) * 1000
+    """Assert that total trace duration is under ms milliseconds.
+
+    Works inside active sessions by using the current wall clock time
+    when ``ended_at`` has not been set yet.
+    """
+    import time
+
+    end = trace.ended_at if trace.ended_at is not None else time.time()
+    actual_ms = (end - trace.started_at) * 1000
     if actual_ms > ms:
         raise _assertion_error(
             trace,

@@ -17,5 +17,9 @@ class TraceNotFoundError(ReagentError, FileNotFoundError):
     """Raised when a referenced trace or golden baseline doesn't exist."""
 
 
+class ReagentWarning(UserWarning):
+    """General warning emitted by reagent-ai core."""
+
+
 class ReagentAdapterWarning(UserWarning):
     """Emitted when an adapter fails to capture data."""

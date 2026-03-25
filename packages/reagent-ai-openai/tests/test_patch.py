@@ -1,8 +1,10 @@
 """Tests for OpenAI adapter patch function."""
 
+import warnings
 from unittest.mock import MagicMock
 
 import reagent_ai
+from reagent_ai.exceptions import ReagentAdapterWarning
 from reagent_ai_openai import patch
 
 
@@ -43,3 +45,15 @@ def test_patch_noop_without_session() -> None:
     patched = patch(client)
     result = patched.chat.completions.create(model="gpt-4o", messages=[])
     assert result is not None
+
+
+def test_patch_warns_on_streaming() -> None:
+    """Streaming calls should emit a warning and skip capture."""
+    client = _mock_openai_client()
+    patched = patch(client)
+    with reagent_ai.session("test") as s:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            patched.chat.completions.create(model="gpt-4o", messages=[], stream=True)
+    assert len(s.trace.turns) == 0
+    assert any(issubclass(w.category, ReagentAdapterWarning) for w in caught)

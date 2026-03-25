@@ -98,3 +98,12 @@ def test_assert_tool_succeeded_missing_result() -> None:
     s.__exit__(None, None, None)
     with pytest.raises(AssertionError, match="no recorded result"):
         s.assert_tool_succeeded("lookup")
+
+
+def test_assert_total_duration_under_works_in_active_session() -> None:
+    """assert_total_duration_under should use wall clock when ended_at is None."""
+    with reagent_ai.session("test") as s:
+        s.log_llm_call(tool_calls=[{"name": "a", "arguments": {}}])
+        s.log_tool_result("a", result="ok")
+        # Session is still active (ended_at is None), assertion should work
+        s.assert_total_duration_under(ms=999999)

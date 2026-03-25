@@ -32,6 +32,7 @@ Install only the adapters you need:
 
 ```bash
 pip install reagent-ai-openai      # OpenAI
+pip install reagent-ai-anthropic   # Anthropic
 pip install reagent-ai-langchain   # LangChain
 pip install reagent-ai-langgraph   # LangGraph
 pip install reagent-ai-crewai      # CrewAI
@@ -56,6 +57,18 @@ def test_my_agent(tmp_path):
     s.assert_called("lookup_order")
     s.assert_never_called("delete_account")
     s.assert_max_turns(5)
+```
+
+### Async Support
+
+Sessions work as both sync and async context managers:
+
+```python
+async def test_async_agent():
+    async with reagent_ai.session("async_flow", trace_dir=".reagent") as s:
+        s.log_llm_call(tool_calls=[{"name": "search", "arguments": {"q": "test"}}])
+        s.log_tool_result("search", result={"found": True})
+    s.assert_called("search")
 ```
 
 ## Assertions
@@ -87,6 +100,15 @@ s.assert_matches_baseline()
 
 Golden baselines are stored as JSON at `{trace_dir}/golden/{name}.trace.json`. When `assert_matches_baseline()` fails, the diff output shows exactly which tools, arguments, or results changed.
 
+Use `ignore_fields` to skip noisy fields that change between runs:
+
+```python
+s.assert_matches_baseline(ignore_fields={"results", "response_text"})
+s.assert_matches_baseline(ignore_fields={"lookup.timestamp", "arguments"})
+```
+
+Supported values: `"arguments"` (all args), `"results"` (all results), `"response_text"`, or specific keys like `"tool_name.arg_key"`.
+
 ## Agent Stack Traces
 
 When an assertion fails, reagent-ai attaches a readable stack trace showing every turn, tool call, and result:
@@ -105,19 +127,52 @@ Turn 2: [text response] "Refund processed."
 
 ## pytest Integration
 
-reagent-ai ships as a pytest plugin (auto-loaded via entry point). It adds three CLI flags:
+reagent-ai ships as a pytest plugin (auto-loaded via entry point). It provides CLI flags, fixtures, and a marker.
+
+### CLI Flags
 
 ```bash
-pytest --reagent-record       # Force live recording (ignore cached traces)
+pytest --reagent-record       # Set metadata flag for live recording
 pytest --reagent-update       # Re-record golden baselines
 pytest --reagent-dir=.reagent  # Override trace directory (default: .reagent)
 ```
 
-Use the `@pytest.mark.reagent` marker to tag tests:
+### Fixtures
+
+| Fixture | Type | Description |
+|---------|------|-------------|
+| `reagent_session` | `Session` | A managed session that reads all CLI flags, applies the `@pytest.mark.reagent` marker, and auto-saves on exit |
+| `reagent_dir` | `str` | The `--reagent-dir` value |
+| `reagent_record` | `bool` | Whether `--reagent-record` was passed |
+| `reagent_update` | `bool` | Whether `--reagent-update` was passed |
+
+### Examples
+
+Using the `reagent_session` fixture (recommended):
+
+```python
+def test_refund_flow(reagent_session):
+    reagent_session.log_llm_call(
+        tool_calls=[{"name": "lookup_order", "arguments": {"id": "123"}}],
+    )
+    reagent_session.log_tool_result("lookup_order", result={"status": "active"})
+    reagent_session.assert_called("lookup_order")
+```
+
+Recording a golden baseline:
 
 ```python
 @pytest.mark.reagent(golden=True)
-def test_refund_flow(tmp_path):
+def test_refund_golden(reagent_session):
+    run_agent(reagent_session)
+```
+
+Or update all goldens at once with `pytest --reagent-update`.
+
+Manual session management still works:
+
+```python
+def test_refund_manual(tmp_path):
     with reagent_ai.session("refund", trace_dir=str(tmp_path)) as s:
         run_agent(s)
     s.assert_matches_baseline()
@@ -141,6 +196,23 @@ s.assert_called("my_tool")
 ```
 
 The `patch()` function wraps `chat.completions.create` to automatically log tool calls and results into the active session.
+
+### Anthropic
+
+```python
+from anthropic import Anthropic
+from reagent_ai_anthropic import patch
+import reagent_ai
+
+client = patch(Anthropic())
+
+with reagent_ai.session("chat") as s:
+    client.messages.create(model="claude-sonnet-4-20250514", messages=[...], tools=[...], max_tokens=1024)
+
+s.assert_called("my_tool")
+```
+
+The `patch()` function wraps `messages.create` to automatically log `tool_use` content blocks into the active session.
 
 ### LangChain
 
@@ -196,6 +268,7 @@ git clone https://github.com/reagent-ai/reagent-ai.git
 cd reagent-ai
 pip install -e "packages/reagent-ai[dev]"
 pip install -e packages/reagent-ai-openai \
+  -e packages/reagent-ai-anthropic \
   -e packages/reagent-ai-langchain \
   -e packages/reagent-ai-langgraph \
   -e packages/reagent-ai-crewai
@@ -216,6 +289,17 @@ mypy packages/reagent-ai/src/reagent_ai/ --strict
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Security & Privacy
+
+Traces are saved as plain JSON files containing the full tool call arguments and results from your agent runs. **This may include sensitive data** such as API keys, user PII, database contents, or any other values your tools handle.
+
+Before committing traces to version control or sharing them:
+- Review trace files for sensitive content
+- Add `.reagent/` to your `.gitignore` (golden baselines may be an exception if they contain only synthetic data)
+- Consider sanitizing tool inputs/outputs before logging if your agent handles real user data
+
+A built-in redaction framework is planned for a future release.
 
 ## Requirements
 

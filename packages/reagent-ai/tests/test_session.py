@@ -1,9 +1,11 @@
 """Tests for reagent_ai session and recorder."""
 
+import warnings
+
 import pytest
 import reagent_ai
 from reagent_ai._context import get_active_session
-from reagent_ai.exceptions import AmbiguousToolCallError, SessionClosedError
+from reagent_ai.exceptions import AmbiguousToolCallError, ReagentWarning, SessionClosedError
 
 
 def test_session_sets_contextvar() -> None:
@@ -100,3 +102,25 @@ def test_session_assert_called_inside_active_session() -> None:
         s.assert_called("lookup")
         s.assert_never_called("delete")
         s.assert_max_turns(5)
+
+
+def test_log_tool_result_before_llm_call_warns() -> None:
+    """log_tool_result before any log_llm_call should warn, not silently drop."""
+    with reagent_ai.session("test") as s:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            s.log_tool_result("lookup", result="ok")
+    assert any(issubclass(w.category, ReagentWarning) for w in caught)
+    assert len(s.trace.turns) == 0
+
+
+@pytest.mark.asyncio
+async def test_async_session_context_manager() -> None:
+    """Session should work as an async context manager."""
+    async with reagent_ai.session("async_test") as s:
+        s.log_llm_call(tool_calls=[{"name": "search", "arguments": {"q": "test"}}])
+        s.log_tool_result("search", result={"found": True})
+        assert get_active_session() is s
+    assert get_active_session() is None
+    assert len(s.trace.turns) == 1
+    assert s.trace.ended_at is not None
