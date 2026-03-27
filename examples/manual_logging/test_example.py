@@ -1,9 +1,9 @@
 """Example: testing an agent with explicit logging (no adapter needed)."""
 
-import reagent_ai
+import reagent_flow
 
 
-def fake_agent_run(session: reagent_ai.Session) -> None:
+def fake_agent_run(session: reagent_flow.Session) -> None:
     """Simulate an agent that looks up an order and processes a refund."""
     session.log_llm_call(
         tool_calls=[{"name": "lookup_order", "arguments": {"order_id": "123"}}],
@@ -21,7 +21,7 @@ def fake_agent_run(session: reagent_ai.Session) -> None:
 
 
 def test_refund_flow(tmp_path: object) -> None:
-    with reagent_ai.session("refund_flow", trace_dir=str(tmp_path)) as s:
+    with reagent_flow.session("refund_flow", trace_dir=str(tmp_path)) as s:
         fake_agent_run(s)
 
     s.assert_called("lookup_order")

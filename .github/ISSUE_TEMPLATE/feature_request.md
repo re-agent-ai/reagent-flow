@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest a feature for reagent-ai
+about: Suggest a feature for reagent-flow
 title: "[FEATURE] "
 labels: enhancement
 ---

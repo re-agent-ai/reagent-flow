@@ -1,27 +1,27 @@
 version: 2
 updates:
   - package-ecosystem: "pip"
-    directory: "/packages/reagent-ai"
+    directory: "/packages/reagent-flow"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/packages/reagent-ai-openai"
+    directory: "/packages/reagent-flow-openai"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/packages/reagent-ai-langchain"
+    directory: "/packages/reagent-flow-langchain"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/packages/reagent-ai-langgraph"
+    directory: "/packages/reagent-flow-langgraph"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/packages/reagent-ai-crewai"
+    directory: "/packages/reagent-flow-crewai"
     schedule:
       interval: "weekly"
 

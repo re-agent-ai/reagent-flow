@@ -12,49 +12,44 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - name: Install tools
-        run: pip install ruff
-
       - name: Lint
-        run: ruff check packages/ examples/
+        run: uv run ruff check packages/ examples/
 
       - name: Format check
-        run: ruff format --check packages/ examples/
+        run: uv run ruff format --check packages/ examples/
 
   typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-          cache: "pip"
 
       - name: Install dependencies
-        run: |
-          pip install -e packages/reagent-ai
-          pip install -e packages/reagent-ai-openai
-          pip install -e packages/reagent-ai-anthropic
-          pip install -e packages/reagent-ai-langchain
-          pip install -e packages/reagent-ai-langgraph
-          pip install -e packages/reagent-ai-crewai
-          pip install mypy
+        run: uv sync
 
       - name: Type check
         run: |
-          mypy packages/reagent-ai/src/reagent_ai/ --strict
-          mypy packages/reagent-ai-openai/src/reagent_ai_openai/ --strict
-          mypy packages/reagent-ai-anthropic/src/reagent_ai_anthropic/ --strict
-          mypy packages/reagent-ai-langchain/src/reagent_ai_langchain/ --strict
-          mypy packages/reagent-ai-langgraph/src/reagent_ai_langgraph/ --strict
-          mypy packages/reagent-ai-crewai/src/reagent_ai_crewai/ --strict
+          uv run mypy packages/reagent-flow/src/reagent_flow/ --strict
+          uv run mypy packages/reagent-flow-openai/src/reagent_flow_openai/ --strict
+          uv run mypy packages/reagent-flow-anthropic/src/reagent_flow_anthropic/ --strict
+          uv run mypy packages/reagent-flow-langchain/src/reagent_flow_langchain/ --strict
+          uv run mypy packages/reagent-flow-langgraph/src/reagent_flow_langgraph/ --strict
+          uv run mypy packages/reagent-flow-crewai/src/reagent_flow_crewai/ --strict
 
   test:
     runs-on: ubuntu-latest
@@ -65,25 +60,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
 
       - name: Install dependencies
-        run: |
-          pip install -e "packages/reagent-ai[dev]"
-          pip install -e packages/reagent-ai-openai
-          pip install -e packages/reagent-ai-anthropic
-          pip install -e packages/reagent-ai-langchain
-          pip install -e packages/reagent-ai-langgraph
-          pip install -e packages/reagent-ai-crewai
+        run: uv sync
 
       - name: Test with coverage
         run: |
-          coverage run -m pytest packages/ examples/ -v
-          coverage report
+          uv run coverage run -m pytest packages/ -v
+          uv run coverage report
 
   build:
     runs-on: ubuntu-latest
@@ -91,19 +82,22 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - name: Install hatch
-        run: pip install hatch
+      - name: Install dependencies
+        run: uv sync
 
       - name: Build packages
         run: |
-          (cd packages/reagent-ai && hatch build)
-          (cd packages/reagent-ai-openai && hatch build)
-          (cd packages/reagent-ai-anthropic && hatch build)
-          (cd packages/reagent-ai-langchain && hatch build)
-          (cd packages/reagent-ai-langgraph && hatch build)
-          (cd packages/reagent-ai-crewai && hatch build)
+          (cd packages/reagent-flow && uv run hatch build)
+          (cd packages/reagent-flow-openai && uv run hatch build)
+          (cd packages/reagent-flow-anthropic && uv run hatch build)
+          (cd packages/reagent-flow-langchain && uv run hatch build)
+          (cd packages/reagent-flow-langgraph && uv run hatch build)
+          (cd packages/reagent-flow-crewai && uv run hatch build)

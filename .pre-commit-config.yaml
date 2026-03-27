@@ -10,7 +10,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: bash -c 'mypy packages/reagent-ai/src/reagent_ai/ packages/reagent-ai-openai/src/reagent_ai_openai/ packages/reagent-ai-anthropic/src/reagent_ai_anthropic/ packages/reagent-ai-langchain/src/reagent_ai_langchain/ packages/reagent-ai-langgraph/src/reagent_ai_langgraph/ packages/reagent-ai-crewai/src/reagent_ai_crewai/ --strict'
+        entry: bash -c 'uv run mypy packages/reagent-flow/src/reagent_flow/ packages/reagent-flow-openai/src/reagent_flow_openai/ packages/reagent-flow-anthropic/src/reagent_flow_anthropic/ packages/reagent-flow-langchain/src/reagent_flow_langchain/ packages/reagent-flow-langgraph/src/reagent_flow_langgraph/ packages/reagent-flow-crewai/src/reagent_flow_crewai/ --strict'
         language: system
         types: [python]
         pass_filenames: false
@@ -18,7 +18,7 @@ repos:
 
       - id: pytest
         name: pytest
-        entry: python -m pytest packages/ examples/ -x -q
+        entry: uv run pytest packages/ -x -q
         language: system
         types: [python]
         pass_filenames: false

@@ -98,7 +98,7 @@ ipython_config.py
 #   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
-#uv.lock
+# uv.lock
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
@@ -140,6 +140,9 @@ celerybeat.pid
 .venv
 env/
 venv/
+
+# uv
+uv.lock
 ENV/
 env.bak/
 venv.bak/
@@ -212,7 +215,12 @@ __marimo__/
 
 # reAgent spec/plan files
 2026-*.md
-reagent-ai-production-practices.md
+reagent-flow-production-practices.md
 AGENTS.md
 CLAUDE.md
+INTERVIEW_STAR.md
+LINKEDIN_POST.md
 tasks
+docs/reagent-ecosystem.md
+docs/reagent-guard-design.md
+demo.py
