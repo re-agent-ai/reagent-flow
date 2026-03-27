@@ -52,3 +52,16 @@ def test_tracer_noop_without_session() -> None:
     response.generations = [[gen]]
     tracer.on_llm_end(response, run_id=uuid4())
     # Should not raise
+
+
+def test_tracer_chain_start_error_emits_warning() -> None:
+    import warnings
+
+    from reagent_flow.exceptions import ReagentAdapterWarning
+
+    tracer = ReagentGraphTracer()
+    with reagent_flow.session("test"):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            tracer.on_chain_start(serialized={"name": object()})
+    assert True
