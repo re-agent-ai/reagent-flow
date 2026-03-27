@@ -11,6 +11,12 @@ dependencies = [
     "reagent-flow-crewai",
 ]
 
+[project.optional-dependencies]
+demo = [
+    "langgraph>=0.2.0",
+    "langchain-google-genai>=2.0.0",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=7.0",
