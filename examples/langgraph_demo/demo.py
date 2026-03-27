@@ -19,7 +19,6 @@ import sys
 import tempfile
 
 import reagent_flow
-from reagent_flow.stacktrace import format_stack_trace
 
 # ---------------------------------------------------------------------------
 # Terminal colors
@@ -46,11 +45,11 @@ def divider(title: str) -> None:
 # Agent builder
 # ---------------------------------------------------------------------------
 
+
 def build_agent(system_prompt: str | None = None):
     """Build a LangGraph ReAct agent with the 3 gatekeeper tools."""
     from langchain_google_genai import ChatGoogleGenerativeAI
     from langgraph.prebuilt import create_react_agent
-
     from tools import assess_risk, get_release_info, make_decision
 
     llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
@@ -85,6 +84,7 @@ def run_agent(agent, task: str, session: reagent_flow.Session):
 # Scenario 1: Standard Release Review (Green Path)
 # ---------------------------------------------------------------------------
 
+
 def scenario_1_green_path(trace_dir: str) -> None:
     """Agent evaluates a risky release and blocks it. All assertions pass."""
     divider("SCENARIO 1: Standard Release Review (Green Path)")
@@ -94,9 +94,7 @@ def scenario_1_green_path(trace_dir: str) -> None:
 
     agent = build_agent()
 
-    with reagent_flow.session(
-        "release-gatekeeper", golden=True, trace_dir=trace_dir
-    ) as s:
+    with reagent_flow.session("release-gatekeeper", golden=True, trace_dir=trace_dir) as s:
         run_agent(agent, "Evaluate release v2.3.1 for production deployment.", s)
 
     # --- Assertions ---
@@ -184,9 +182,7 @@ def scenario_2_red_path() -> None:
     trace_dir = tempfile.mkdtemp()
 
     try:
-        with reagent_flow.session(
-            "release-gatekeeper-hotfix", trace_dir=trace_dir
-        ) as s:
+        with reagent_flow.session("release-gatekeeper-hotfix", trace_dir=trace_dir) as s:
             run_agent(
                 agent,
                 "CRITICAL PRODUCTION OUTAGE. Evaluate hotfix v2.3.2 for "
@@ -210,8 +206,10 @@ def scenario_2_red_path() -> None:
                 s.assert_called("assess_risk")
             except AssertionError as e:
                 print(str(e))
-            print(f"\n{YELLOW}reagent-flow caught it. The hotfix would have been "
-                  f"approved without risk evaluation.{RESET}")
+            print(
+                f"\n{YELLOW}reagent-flow caught it. The hotfix would have been "
+                f"approved without risk evaluation.{RESET}"
+            )
         else:
             # Agent was diligent — show the pre-built fallback
             print(FALLBACK_FAILURE_OUTPUT)
@@ -222,6 +220,7 @@ def scenario_2_red_path() -> None:
 # ---------------------------------------------------------------------------
 # Scenario 3: Regression Detection (Diff Path)
 # ---------------------------------------------------------------------------
+
 
 def scenario_3_diff_path(trace_dir: str) -> None:
     """Same agent, different release data. Baseline diff detects behavior change."""
@@ -247,7 +246,7 @@ def scenario_3_diff_path(trace_dir: str) -> None:
         print(f"{ORANGE}Baseline diff detected!{RESET}\n")
         print(str(e))
         print(f"\n{YELLOW}The agent's tool call sequence changed between releases.")
-        print(f"This is expected here (different data = different decision),")
+        print("This is expected here (different data = different decision),")
         print(f"but in real CI this would flag an unintended behavioral regression.{RESET}")
 
 
@@ -255,13 +254,14 @@ def scenario_3_diff_path(trace_dir: str) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """Run all demo scenarios."""
     # Check for API key
     if not os.environ.get("GOOGLE_API_KEY"):
         print(f"{RED}GOOGLE_API_KEY not set.{RESET}")
-        print(f"Get a free key at: https://aistudio.google.com/apikey")
-        print(f"Then run: GOOGLE_API_KEY='your-key' uv run python demo.py")
+        print("Get a free key at: https://aistudio.google.com/apikey")
+        print("Then run: GOOGLE_API_KEY='your-key' uv run python demo.py")
         sys.exit(1)
 
     print(f"\n{BOLD}reagent-flow + LangGraph Demo: Release Risk Gatekeeper{RESET}")
@@ -280,9 +280,9 @@ def main() -> None:
         print()
         print("  1. " + f"{GREEN}Green path{RESET}  — assertions verified correct agent behavior")
         print("  2. " + f"{RED}Red path{RESET}    — caught (or demonstrated) a skipped safety step")
-        print("  3. " + f"{ORANGE}Diff path{RESET}   — baseline comparison detected behavioral change")
+        print(f"  3. {ORANGE}Diff path{RESET}   — baseline comparison detected change")
         print()
-        print(f"{DIM}Your agents are non-deterministic. Your reliability checks shouldn't be.{RESET}")
+        print(f"{DIM}Your agents are non-deterministic. Your checks shouldn't be.{RESET}")
         print()
     finally:
         shutil.rmtree(trace_dir, ignore_errors=True)

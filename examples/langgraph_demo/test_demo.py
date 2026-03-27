@@ -13,7 +13,6 @@ import os
 import tempfile
 
 import pytest
-
 import reagent_flow
 
 # Skip all tests if no API key
@@ -27,7 +26,6 @@ def _build_agent(system_prompt: str | None = None):
     """Build the gatekeeper agent."""
     from langchain_google_genai import ChatGoogleGenerativeAI
     from langgraph.prebuilt import create_react_agent
-
     from tools import assess_risk, get_release_info, make_decision
 
     llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
@@ -80,18 +78,12 @@ def test_golden_baseline_diff() -> None:
     trace_dir = tempfile.mkdtemp()
 
     # Record golden baseline (risky release)
-    with reagent_flow.session(
-        "release-gatekeeper", golden=True, trace_dir=trace_dir
-    ) as golden_s:
-        _run_agent(
-            agent, "Evaluate release v2.3.1 for production deployment.", golden_s
-        )
+    with reagent_flow.session("release-gatekeeper", golden=True, trace_dir=trace_dir) as golden_s:
+        _run_agent(agent, "Evaluate release v2.3.1 for production deployment.", golden_s)
 
     # Run with clean release data
     with reagent_flow.session("release-gatekeeper", trace_dir=trace_dir) as actual_s:
-        _run_agent(
-            agent, "Evaluate release v2.4.0 for production deployment.", actual_s
-        )
+        _run_agent(agent, "Evaluate release v2.4.0 for production deployment.", actual_s)
 
     # Ignore arguments and results (LLM output is non-deterministic)
     # but tool call sequence (names) should still be compared

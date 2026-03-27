@@ -12,7 +12,6 @@ import json
 
 from langchain_core.tools import tool
 
-
 # ---------------------------------------------------------------------------
 # Release data fixtures — simulate real CI/CD system responses
 # ---------------------------------------------------------------------------
