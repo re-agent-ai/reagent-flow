@@ -95,9 +95,9 @@ jobs:
 
       - name: Build packages
         run: |
-          (cd packages/reagent-flow && uv run hatch build)
-          (cd packages/reagent-flow-openai && uv run hatch build)
-          (cd packages/reagent-flow-anthropic && uv run hatch build)
-          (cd packages/reagent-flow-langchain && uv run hatch build)
-          (cd packages/reagent-flow-langgraph && uv run hatch build)
-          (cd packages/reagent-flow-crewai && uv run hatch build)
+          (cd packages/reagent-flow && uv build)
+          (cd packages/reagent-flow-openai && uv build)
+          (cd packages/reagent-flow-anthropic && uv build)
+          (cd packages/reagent-flow-langchain && uv build)
+          (cd packages/reagent-flow-langgraph && uv build)
+          (cd packages/reagent-flow-crewai && uv build)
