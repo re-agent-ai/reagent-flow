@@ -146,12 +146,12 @@ def get_release_info(version: str) -> str:
 def assess_risk(release_info: str) -> str:
     """Assess the risk level of a release based on its information.
 
-    Analyze the release data and return a risk assessment with level
-    (LOW, MEDIUM, HIGH) and detailed justification. Consider test
-    failures, coverage, open bugs, and deployment history.
+    Tracing checkpoint: the LLM produces a risk assessment (LOW/MEDIUM/HIGH
+    with justification) as the argument. The tool returns it unchanged so
+    reagent-flow records it as a distinct step in the trace.
 
     Args:
-        release_info: The release information JSON string to analyze.
+        release_info: The LLM's risk analysis of the release data.
     """
     return release_info
 
@@ -160,10 +160,11 @@ def assess_risk(release_info: str) -> str:
 def make_decision(risk_assessment: str) -> str:
     """Make a final deployment decision: APPROVE or BLOCK.
 
-    Based on the risk assessment, decide whether the release should
-    proceed to production. Return APPROVE or BLOCK with justification.
+    Tracing checkpoint: the LLM produces an APPROVE/BLOCK decision as the
+    argument. The tool returns it unchanged so reagent-flow records it as
+    a distinct step in the trace.
 
     Args:
-        risk_assessment: The risk assessment to base the decision on.
+        risk_assessment: The LLM's deployment decision with justification.
     """
     return risk_assessment

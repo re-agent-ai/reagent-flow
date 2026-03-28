@@ -10,10 +10,11 @@ Skip them in CI by not setting the env var, or run explicitly:
 from __future__ import annotations
 
 import os
-import tempfile
+from pathlib import Path
 
 import pytest
 import reagent_flow
+from agent import build_agent, run_agent
 
 # Skip all tests if no API key
 pytestmark = pytest.mark.skipif(
@@ -22,47 +23,14 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _build_agent(system_prompt: str | None = None):
-    """Build the gatekeeper agent."""
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    from langgraph.prebuilt import create_react_agent
-    from tools import assess_risk, get_release_info, make_decision
-
-    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
-    tools = [get_release_info, assess_risk, make_decision]
-
-    prompt = system_prompt or (
-        "You are a Release Risk Gatekeeper. Your job is to evaluate whether "
-        "a software release is safe to deploy to production.\n\n"
-        "For EVERY release review, you MUST follow this exact process:\n"
-        "1. Call get_release_info to gather release data\n"
-        "2. Call assess_risk with the release data to produce a risk assessment\n"
-        "3. Call make_decision with the risk assessment to make a final APPROVE/BLOCK decision\n\n"
-        "Never skip a step. Never make a decision without assessing risk first."
-    )
-
-    return create_react_agent(llm, tools, prompt=prompt)
-
-
-def _run_agent(agent, task: str, session: reagent_flow.Session):
-    """Run the agent with reagent-flow tracing."""
-    from reagent_flow_langgraph import ReagentGraphTracer
-
-    tracer = ReagentGraphTracer()
-    return agent.invoke(
-        {"messages": [("user", task)]},
-        config={"callbacks": [tracer]},
-    )
-
-
 @pytest.mark.e2e
-def test_standard_release_review() -> None:
+def test_standard_release_review(tmp_path: Path) -> None:
     """Scenario 1: Agent evaluates risky release. All assertions pass."""
-    agent = _build_agent()
-    trace_dir = tempfile.mkdtemp()
+    agent = build_agent()
+    trace_dir = str(tmp_path)
 
     with reagent_flow.session("release-gatekeeper", trace_dir=trace_dir) as s:
-        _run_agent(agent, "Evaluate release v2.3.1 for production deployment.", s)
+        run_agent(agent, "Evaluate release v2.3.1 for production deployment.")
 
     s.assert_called("get_release_info")
     s.assert_called("make_decision")
@@ -72,21 +40,19 @@ def test_standard_release_review() -> None:
 
 
 @pytest.mark.e2e
-def test_golden_baseline_diff() -> None:
+def test_golden_baseline_diff(tmp_path: Path) -> None:
     """Scenario 3: Different release data triggers baseline diff."""
-    agent = _build_agent()
-    trace_dir = tempfile.mkdtemp()
+    agent = build_agent()
+    trace_dir = str(tmp_path)
 
     # Record golden baseline (risky release)
-    with reagent_flow.session("release-gatekeeper", golden=True, trace_dir=trace_dir) as golden_s:
-        _run_agent(agent, "Evaluate release v2.3.1 for production deployment.", golden_s)
+    with reagent_flow.session("release-gatekeeper", golden=True, trace_dir=trace_dir) as _golden_s:
+        run_agent(agent, "Evaluate release v2.3.1 for production deployment.")
 
     # Run with clean release data
     with reagent_flow.session("release-gatekeeper", trace_dir=trace_dir) as actual_s:
-        _run_agent(agent, "Evaluate release v2.4.0 for production deployment.", actual_s)
+        run_agent(agent, "Evaluate release v2.4.0 for production deployment.")
 
-    # Ignore arguments and results (LLM output is non-deterministic)
-    # but tool call sequence (names) should still be compared
     from reagent_flow.diff import diff_traces
     from reagent_flow.storage.json import load_golden
 
@@ -94,5 +60,4 @@ def test_golden_baseline_diff() -> None:
     result = diff_traces(
         golden, actual_s.trace, ignore_fields={"arguments", "results", "response_text"}
     )
-    # Just verify the diff engine runs without error
     assert result.summary() is not None
