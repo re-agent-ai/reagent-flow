@@ -55,8 +55,11 @@ def _wrap_agent_tools(agent: Any) -> None:
                 session = get_active_session()
                 if session is not None:
                     try:
+                        arguments: dict[str, Any] = dict(kwargs)
+                        if args:
+                            arguments["_positional"] = list(args)
                         session.log_llm_call(
-                            tool_calls=[{"name": name, "arguments": dict(kwargs)}],
+                            tool_calls=[{"name": name, "arguments": arguments}],
                         )
                     except Exception as e:
                         _warn(f"Failed to log CrewAI tool call: {e}")
@@ -73,7 +76,7 @@ def _wrap_agent_tools(agent: Any) -> None:
 
                 if session is not None:
                     try:
-                        session.log_tool_result(name, result=str(result))
+                        session.log_tool_result(name, result=result)
                     except Exception as e:
                         _warn(f"Failed to log CrewAI tool result: {e}")
                 return result

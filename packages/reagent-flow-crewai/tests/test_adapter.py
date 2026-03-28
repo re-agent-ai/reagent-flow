@@ -50,6 +50,37 @@ def test_instrument_captures_tool_calls() -> None:
     assert len(s.trace.turns) >= 1
 
 
+def test_instrument_preserves_structured_result() -> None:
+    """P2 fix: Tool results should be stored as-is, not coerced to str."""
+    structured = {"status": "found", "count": 42}
+    crew = _mock_crew()
+    # Replace _run with one that returns structured data
+    crew.agents[0].tools[0]._run.return_value = structured
+    instrument(crew)
+
+    tool = crew.agents[0].tools[0]
+    with reagent_flow.session("test") as s:
+        tool._run(query="test")
+
+    result = s.trace.turns[0].tool_results[0].result
+    assert result == structured
+    assert isinstance(result, dict)
+
+
+def test_instrument_captures_positional_args() -> None:
+    """P2 fix: Positional args should be recorded, not silently dropped."""
+    crew = _mock_crew()
+    instrument(crew)
+
+    tool = crew.agents[0].tools[0]
+    with reagent_flow.session("test") as s:
+        tool._run("pos1", "pos2", key="val")
+
+    args = s.trace.turns[0].llm_call.tool_calls[0].arguments
+    assert args["_positional"] == ["pos1", "pos2"]
+    assert args["key"] == "val"
+
+
 def test_instrument_noop_without_session() -> None:
     crew = _mock_crew()
     instrument(crew)

@@ -8,7 +8,22 @@ version = "0.1.0"
 description = "Reagent-Flow adapter for OpenAI Python SDK"
 requires-python = ">=3.10"
 license = "MIT"
+keywords = ["ai", "agents", "testing", "llm", "openai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+]
 dependencies = ["reagent-flow>=0.1.0", "openai>=1.0"]
+
+[project.urls]
+Homepage = "https://github.com/re-agent-ai/reagent-flow"
+Repository = "https://github.com/re-agent-ai/reagent-flow"
+Issues = "https://github.com/re-agent-ai/reagent-flow/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reagent_flow_openai"]
