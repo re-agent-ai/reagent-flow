@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Generator
+from typing import Generator
 
 import pytest
 
 from reagent_flow.session import Session
 
 
-def pytest_addoption(parser: Any) -> None:
+def pytest_addoption(parser: pytest.Parser) -> None:
     """Add reagent-flow CLI options to pytest."""
     group = parser.getgroup("reagent-flow", "Reagent-Flow options")
     group.addoption(
@@ -31,7 +31,7 @@ def pytest_addoption(parser: Any) -> None:
     )
 
 
-def pytest_configure(config: Any) -> None:
+def pytest_configure(config: pytest.Config) -> None:
     """Register reagent-flow markers."""
     config.addinivalue_line(
         "markers",

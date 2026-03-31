@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextvars
 import time
+import types
 import uuid
+from types import EllipsisType
 from typing import Any
 
 from reagent_flow._context import _active_session
@@ -22,18 +25,22 @@ class Session:
         golden: bool = False,
         metadata: dict[str, Any] | None = None,
         trace_dir: str = ".reagent",
+        parent_trace_id: str | None = None,
+        handoff_context: dict[str, Any] | None = None,
     ) -> None:
         self.trace = Trace(
             trace_id=str(uuid.uuid4()),
             name=name,
             metadata=metadata or {},
             started_at=time.time(),
+            parent_trace_id=parent_trace_id,
+            handoff_context=handoff_context,
         )
         self._golden = golden
         self._trace_dir = trace_dir
         self._recorder = Recorder()
         self._closed = False
-        self._token: Any = None
+        self._token: contextvars.Token[Session | None] | None = None
 
     def __enter__(self) -> Session:
         self._token = _active_session.set(self)
@@ -43,8 +50,12 @@ class Session:
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
-        exc_tb: Any,
+        exc_tb: types.TracebackType | None,
     ) -> None:
+        self._finalize()
+
+    def _finalize(self) -> None:
+        """Shared teardown for sync and async context managers."""
         self._sync_trace()
         self.trace.ended_at = time.time()
         self._closed = True
@@ -142,6 +153,64 @@ class Session:
         if not result.is_match:
             raise AssertionError(f"Trace does not match golden baseline:\n{result.summary()}")
 
+    def assert_flow(self, pattern: list[str | EllipsisType]) -> None:
+        """Assert that tool calls match a flow pattern."""
+        from reagent_flow.assertions import assert_flow
+
+        self._sync_trace()
+        assert_flow(self.trace, pattern)
+
+    def assert_called_times(self, tool_name: str, *, min: int = 0, max: int | None = None) -> None:
+        """Assert that a tool was called between min and max times."""
+        from reagent_flow.assertions import assert_called_times
+
+        self._sync_trace()
+        assert_called_times(self.trace, tool_name, min=min, max=max)
+
+    def assert_called_with(self, tool_name: str, **expected_args: Any) -> None:
+        """Assert that a tool was called with specific argument values."""
+        from reagent_flow.assertions import assert_called_with
+
+        self._sync_trace()
+        assert_called_with(self.trace, tool_name, **expected_args)
+
+    def assert_handoff_received(self, parent: Session) -> None:
+        """Assert that this session's trace is linked to a parent session."""
+        from reagent_flow.assertions import assert_handoff_received
+
+        self._sync_trace()
+        parent._sync_trace()
+        assert_handoff_received(self.trace, parent.trace)
+
+    def assert_handoff_has_fields(self, fields: list[str]) -> None:
+        """Assert that required fields exist in handoff context."""
+        from reagent_flow.assertions import assert_handoff_has_fields
+
+        self._sync_trace()
+        assert_handoff_has_fields(self.trace, fields=fields)
+
+    def assert_total_tokens_under(self, n: int, *, allow_missing: bool = False) -> None:
+        """Assert that total token usage is under n."""
+        from reagent_flow.assertions import assert_total_tokens_under
+
+        self._sync_trace()
+        assert_total_tokens_under(self.trace, n, allow_missing=allow_missing)
+
+    def assert_cost_under(
+        self,
+        *,
+        usd: float,
+        model_costs: dict[str, dict[str, float]],
+        allow_unpriced: bool = False,
+    ) -> None:
+        """Assert that estimated cost is under a USD limit."""
+        from reagent_flow.assertions import assert_cost_under
+
+        self._sync_trace()
+        assert_cost_under(
+            self.trace, usd=usd, model_costs=model_costs, allow_unpriced=allow_unpriced
+        )
+
     # -- Async context manager support --
 
     async def __aenter__(self) -> Session:
@@ -153,13 +222,7 @@ class Session:
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
-        exc_tb: Any,
+        exc_tb: types.TracebackType | None,
     ) -> None:
         """Exit an async session context."""
-        self._sync_trace()
-        self.trace.ended_at = time.time()
-        self._closed = True
-        if self._token is not None:
-            _active_session.reset(self._token)
-            self._token = None
-        self._save()
+        self._finalize()
