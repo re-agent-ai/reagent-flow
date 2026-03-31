@@ -114,6 +114,76 @@ def test_log_tool_result_before_llm_call_warns() -> None:
     assert len(s.trace.turns) == 0
 
 
+def test_session_assert_flow() -> None:
+    """assert_flow wrapper works on Session."""
+    with reagent_flow.session("test") as s:
+        s.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
+        s.log_tool_result("search", result="ok")
+        s.log_llm_call(tool_calls=[{"name": "summarize", "arguments": {}}])
+        s.log_tool_result("summarize", result="ok")
+    s.assert_flow(["search", ..., "summarize"])
+
+
+def test_session_assert_called_times() -> None:
+    """assert_called_times wrapper works on Session."""
+    with reagent_flow.session("test") as s:
+        s.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
+        s.log_tool_result("search", result="ok")
+        s.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
+        s.log_tool_result("search", result="ok")
+    s.assert_called_times("search", min=1, max=3)
+
+
+def test_session_assert_called_with() -> None:
+    """assert_called_with wrapper works on Session."""
+    with reagent_flow.session("test") as s:
+        s.log_llm_call(tool_calls=[{"name": "search", "arguments": {"query": "test"}}])
+        s.log_tool_result("search", result="ok")
+    s.assert_called_with("search", query="test")
+
+
+def test_session_handoff_integration() -> None:
+    """Full handoff flow: parent -> child with context."""
+    with reagent_flow.session("orchestrator") as parent:
+        parent.log_llm_call(tool_calls=[{"name": "plan", "arguments": {}}])
+        parent.log_tool_result("plan", result="ok")
+
+    with reagent_flow.session(
+        "researcher",
+        parent_trace_id=parent.trace.trace_id,
+        handoff_context={"query": "Q3 earnings", "constraints": ["2024"]},
+    ) as child:
+        child.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
+        child.log_tool_result("search", result="ok")
+
+    child.assert_handoff_received(parent)
+    child.assert_handoff_has_fields(["query", "constraints"])
+
+
+def test_session_assert_total_tokens_under() -> None:
+    """assert_total_tokens_under wrapper works on Session."""
+    with reagent_flow.session("test") as s:
+        s.log_llm_call(
+            tool_calls=[{"name": "search", "arguments": {}}],
+            token_usage={"input_tokens": 100, "output_tokens": 200},
+            model="gpt-4o",
+        )
+        s.log_tool_result("search", result="ok")
+    s.assert_total_tokens_under(500)
+
+
+def test_session_assert_cost_under() -> None:
+    """assert_cost_under wrapper works on Session."""
+    with reagent_flow.session("test") as s:
+        s.log_llm_call(
+            tool_calls=[{"name": "search", "arguments": {}}],
+            token_usage={"input_tokens": 100, "output_tokens": 50},
+            model="gpt-4o",
+        )
+        s.log_tool_result("search", result="ok")
+    s.assert_cost_under(usd=1.00, model_costs={"gpt-4o": {"input": 2.50, "output": 10.00}})
+
+
 @pytest.mark.asyncio
 async def test_async_session_context_manager() -> None:
     """Session should work as an async context manager."""

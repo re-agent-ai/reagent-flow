@@ -1,6 +1,15 @@
 """Tests for reagent_flow.models."""
 
-from reagent_flow.models import LLMCall, Message, ToolCall, ToolResult, Trace, Turn
+from reagent_flow.models import (
+    LLMCall,
+    Message,
+    ToolCall,
+    ToolResult,
+    Trace,
+    Turn,
+    trace_from_dict,
+    trace_to_dict,
+)
 
 
 def test_tool_call_creation() -> None:
@@ -69,3 +78,55 @@ def test_trace_serialization_roundtrip() -> None:
     assert restored.turns[0].llm_call.tool_calls[0].name == "lookup"
     assert restored.turns[0].tool_results[0].result == {"found": True}
     assert restored.format_version == "1"
+
+
+def test_trace_handoff_fields_default() -> None:
+    """New handoff fields default to None."""
+    tr = Trace(trace_id="t1", name="test")
+    assert tr.parent_trace_id is None
+    assert tr.handoff_context is None
+
+
+def test_trace_handoff_fields_set() -> None:
+    """Handoff fields can be set on construction."""
+    tr = Trace(
+        trace_id="t1",
+        name="test",
+        parent_trace_id="parent-123",
+        handoff_context={"query": "test"},
+    )
+    assert tr.parent_trace_id == "parent-123"
+    assert tr.handoff_context == {"query": "test"}
+
+
+def test_backward_compat_no_handoff_fields() -> None:
+    """Old trace dicts without handoff fields load as None."""
+    old_dict = {
+        "trace_id": "t1",
+        "name": "test",
+        "turns": [],
+        "metadata": {},
+        "started_at": 1.0,
+        "ended_at": 2.0,
+        "format_version": "1",
+    }
+    tr = trace_from_dict(old_dict)
+    assert tr.parent_trace_id is None
+    assert tr.handoff_context is None
+
+
+def test_handoff_roundtrip_serialization() -> None:
+    """Trace with handoff fields survives serialize/deserialize."""
+    tr = Trace(
+        trace_id="t1",
+        name="test",
+        parent_trace_id="parent-456",
+        handoff_context={"query": "earnings", "year": 2024},
+    )
+    d = trace_to_dict(tr)
+    assert d["parent_trace_id"] == "parent-456"
+    assert d["handoff_context"] == {"query": "earnings", "year": 2024}
+
+    restored = trace_from_dict(d)
+    assert restored.parent_trace_id == "parent-456"
+    assert restored.handoff_context == {"query": "earnings", "year": 2024}

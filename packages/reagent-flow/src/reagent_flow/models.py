@@ -69,6 +69,8 @@ class Trace:
     started_at: float = 0
     ended_at: float | None = None
     format_version: str = FORMAT_VERSION
+    parent_trace_id: str | None = None
+    handoff_context: dict[str, Any] | None = None
 
 
 def trace_to_dict(trace: Trace) -> dict[str, Any]:
@@ -110,4 +112,6 @@ def trace_from_dict(d: dict[str, Any]) -> Trace:
         started_at=d.get("started_at", 0),
         ended_at=d.get("ended_at"),
         format_version=d.get("format_version", FORMAT_VERSION),
+        parent_trace_id=d.get("parent_trace_id"),
+        handoff_context=d.get("handoff_context"),
     )
