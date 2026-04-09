@@ -180,6 +180,8 @@ Trace
   started_at: float (epoch)
   ended_at: float | None
   format_version: str
+  parent_trace_id: str | None      (v0.2 — links child to parent agent)
+  handoff_context: dict | None     (v0.2 — context passed from parent)
   turns: list[Turn]
 
 Turn
@@ -261,12 +263,25 @@ Assertions are pure functions that operate on a `Trace` dataclass:
 |-----------|-------|
 | `assert_called(tool)` | Scans all turns for a matching tool name |
 | `assert_never_called(tool)` | Inverse of `assert_called` |
-| `assert_called_before(a, b)` | Compares first occurrence indices |
+| `assert_called_before(a, b)` | Compares flat positional ordering across all turns (parallel calls ordered by list position) |
 | `assert_tool_succeeded(tool)` | Checks tool was called AND all results have `error=None` AND matching `call_id` |
 | `assert_max_turns(n)` | `len(trace.turns) <= n` |
 | `assert_total_duration_under(ms)` | Uses wall clock for active sessions, `ended_at` for finalized |
+| `assert_flow(pattern)` | Matches flattened tool call names against a pattern with `...` wildcards. Anchored start/end by default. |
+| `assert_called_times(tool, min, max)` | Counts all tool calls matching name, checks bounds |
+| `assert_called_with(tool, **args)` | Subset match on any call's arguments, reports closest mismatch |
+| `assert_handoff_received(child, parent)` | Verifies `child.parent_trace_id == parent.trace_id` |
+| `assert_handoff_has_fields(child, fields)` | Checks required fields are present and non-None in `handoff_context` |
+| `assert_total_tokens_under(n)` | Sums input+output tokens across turns (handles OpenAI/Anthropic key names) |
+| `assert_cost_under(usd, model_costs)` | Estimates cost via longest-prefix model matching against per-1M-token prices |
+| `assert_handoff_matches(child, schema)` | Validates handoff_context against a `{field: type}` schema. Supports nested dicts, typed/union lists, list-of-dicts, and optional Pydantic `BaseModel`. Uses `_strict_isinstance` (bool≠int). |
+| `assert_no_extra_fields(child, allowed)` | Fails if handoff_context contains any key not in the allowed list |
+| `assert_tool_output_matches(trace, tool, schema)` | Validates tool result dicts against a schema. Same nested schema support as `assert_handoff_matches`. |
+| `assert_context_preserved(source, child, fields)` | Verifies `source[field] == child.handoff_context[field]` for each field |
 
 All assertion failures raise `AssertionError` with an **Agent Stack Trace** attached.
+
+All handoff assertions share `_require_handoff_context(child_trace)` which validates and returns the handoff_context dict (or raises).
 
 ### Agent Stack Trace
 
@@ -430,7 +445,7 @@ UserWarning
 | Zero runtime deps | Avoids conflicts; traces are just dataclasses and JSON |
 | ContextVar over global | Thread-safe and asyncio-safe without locks |
 | Separate adapter packages | Users install only what they need; no framework dep in core |
-| Dataclasses over Pydantic | Lighter, no validation overhead for internal data |
+| Dataclasses over Pydantic | Lighter, no validation overhead for internal data. Pydantic supported as optional schema input in v0.4. |
 | `_sync_trace()` on every assertion | Enables assertions inside active sessions |
 | Positional diff comparison | Tool call order matters for behavioral testing; call_ids are random UUIDs |
 | `coverage run` over `--cov` | Avoids plugin load-order issue with pytest entry points |

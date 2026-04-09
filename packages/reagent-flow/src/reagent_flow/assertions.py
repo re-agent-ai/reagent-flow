@@ -223,7 +223,7 @@ def assert_flow(trace: Trace, pattern: list[str | EllipsisType]) -> None:
 
     # Match segments against flat list
     cursor = 0
-    for _seg_idx, (segment, mode) in enumerate(zip(segments, segment_modes)):
+    for segment, mode in zip(segments, segment_modes):
         if mode == "anchored":
             for j, name in enumerate(segment):
                 pos = cursor + j
@@ -298,8 +298,8 @@ def assert_handoff_received(child_trace: Trace, parent_trace: Trace) -> None:
         )
 
 
-def assert_handoff_has_fields(child_trace: Trace, *, fields: list[str]) -> None:
-    """Assert that required fields exist and are non-None in handoff context."""
+def _require_handoff_context(child_trace: Trace) -> dict[str, Any]:
+    """Validate and return handoff_context as a dict, or raise."""
     if child_trace.handoff_context is None:
         raise _assertion_error(
             child_trace,
@@ -311,15 +311,257 @@ def assert_handoff_has_fields(child_trace: Trace, *, fields: list[str]) -> None:
             f'"{child_trace.name}" handoff_context must be a dict, '
             f"got {type(child_trace.handoff_context).__name__}",
         )
+    return child_trace.handoff_context
+
+
+def assert_handoff_has_fields(child_trace: Trace, *, fields: list[str]) -> None:
+    """Assert that required fields exist and are non-None in handoff context."""
+    ctx = _require_handoff_context(child_trace)
     missing: list[str] = []
     for f in fields:
-        if f not in child_trace.handoff_context or child_trace.handoff_context[f] is None:
+        if f not in ctx or ctx[f] is None:
             missing.append(f)
     if missing:
         raise _assertion_error(
             child_trace,
             f'"{child_trace.name}" handoff_context missing or None for field(s): {missing}',
         )
+
+
+def _strict_isinstance(value: Any, expected_type: type) -> bool:
+    """Like isinstance() but bool and int are treated as distinct types.
+
+    Python's bool subclasses int, so isinstance(True, int) is True.
+    For contract testing, we want strict type separation:
+    - int schema rejects bool values
+    - bool schema rejects int values
+    """
+    if expected_type is int and isinstance(value, bool):
+        return False
+    if expected_type is bool and not isinstance(value, bool):
+        return False
+    return isinstance(value, expected_type)
+
+
+SchemaValue = type | dict[str, Any] | list[Any]
+
+
+def _validate_schema(
+    value: Any,
+    schema: SchemaValue,
+    path: str,
+    trace: Trace,
+    context: str,
+) -> None:
+    """Recursively validate a value against a schema.
+
+    Args:
+        value: The actual value to validate.
+        schema: A type (isinstance check), dict (nested schema), or list (typed list).
+        path: Dot/bracket-notation path for error messages.
+        trace: The trace for error formatting.
+        context: Prefix for error messages (e.g. "handoff field" or "tool 'search' result field").
+
+    """
+    # Case 1: schema is a Python type — strict isinstance check (bool≠int)
+    if isinstance(schema, type):
+        if not _strict_isinstance(value, schema):
+            raise _assertion_error(
+                trace,
+                f"{context} '{path}': expected {schema.__name__}, got {type(value).__name__}",
+            )
+        return
+
+    # Case 2: schema is a dict — nested dict validation
+    if isinstance(schema, dict):
+        if not isinstance(value, dict):
+            raise _assertion_error(
+                trace,
+                f"{context} '{path}': expected dict, got {type(value).__name__}",
+            )
+        for key, sub_schema in schema.items():
+            child_path = f"{path}.{key}" if path else key
+            if key not in value:
+                raise _assertion_error(
+                    trace,
+                    f"{context} '{child_path}': missing from data",
+                )
+            _validate_schema(value[key], sub_schema, child_path, trace, context)
+        return
+
+    # Case 3: schema is a list — typed list validation
+    if isinstance(schema, list):
+        if not isinstance(value, list):
+            raise _assertion_error(
+                trace,
+                f"{context} '{path}': expected list, got {type(value).__name__}",
+            )
+        if not schema:
+            return  # empty schema list = no element constraints
+
+        # Check if it's a list-of-dicts schema: [{"key": type}]
+        if len(schema) == 1 and isinstance(schema[0], dict):
+            dict_schema = schema[0]
+            for i, elem in enumerate(value):
+                elem_path = f"{path}[{i}]"
+                _validate_schema(elem, dict_schema, elem_path, trace, context)
+            return
+
+        # Otherwise it's a union type list: [str], [str, int], etc.
+        # All elements in schema must be types
+        for i, elem in enumerate(value):
+            if not any(_strict_isinstance(elem, t) for t in schema):
+                type_names = " | ".join(t.__name__ for t in schema)
+                raise _assertion_error(
+                    trace,
+                    f"{context} '{path}[{i}]': expected {type_names}, got {type(elem).__name__}",
+                )
+        return
+
+    msg = f"Invalid schema value at '{path}': {schema!r}"
+    raise TypeError(msg)
+
+
+def assert_handoff_matches(
+    child_trace: Trace, *, schema: dict[str, type | dict[str, Any] | list[Any]]
+) -> None:
+    """Validate handoff_context against a schema.
+
+    Supports flat types (v0.3), nested dicts, typed lists, and
+    list-of-dicts schemas (v0.4). Also accepts a Pydantic BaseModel class.
+    """
+    ctx = _require_handoff_context(child_trace)
+
+    # Pydantic model detection (runtime only, no import at module level)
+    if isinstance(schema, type) and hasattr(schema, "model_validate"):
+        try:
+            schema.model_validate(ctx)
+        except Exception as e:
+            raise _assertion_error(
+                child_trace,
+                f"handoff context validation failed: {e}",
+            ) from None
+        return
+
+    for field, field_schema in schema.items():
+        if field not in ctx:
+            raise _assertion_error(
+                child_trace,
+                f"handoff field '{field}': missing from handoff_context",
+            )
+        _validate_schema(
+            ctx[field],
+            field_schema,
+            field,
+            child_trace,
+            "handoff field",
+        )
+
+
+def assert_no_extra_fields(child_trace: Trace, *, allowed: list[str]) -> None:
+    """Fail if handoff_context contains any key not in allowed."""
+    ctx = _require_handoff_context(child_trace)
+    allowed_set = set(allowed)
+    extras = set(ctx.keys()) - allowed_set
+    if extras:
+        raise _assertion_error(
+            child_trace,
+            f"unexpected handoff fields: {extras}",
+        )
+
+
+def assert_tool_output_matches(
+    trace: Trace,
+    tool_name: str,
+    *,
+    schema: dict[str, type | dict[str, Any] | list[Any]],
+) -> None:
+    """Validate tool result values against a schema.
+
+    Supports flat types (v0.3), nested dicts, typed lists, and
+    list-of-dicts schemas (v0.4).
+    """
+    matched_results: list[tuple[str, Any]] = []
+
+    for turn in trace.turns:
+        for tc in turn.llm_call.tool_calls:
+            if tc.name != tool_name:
+                continue
+            for tr in turn.tool_results:
+                if tr.call_id == tc.call_id:
+                    if tr.error is not None:
+                        continue
+                    matched_results.append((tr.call_id, tr.result))
+
+    if not matched_results:
+        raise _assertion_error(
+            trace,
+            f'"{tool_name}" was never called or all calls errored',
+            expected_tool=tool_name,
+        )
+
+    # Validate all results are dicts before schema checking
+    for call_id, result in matched_results:
+        if not isinstance(result, dict):
+            raise _assertion_error(
+                trace,
+                f"tool '{tool_name}' result is not a dict, got "
+                f"{type(result).__name__} (call_id: {call_id})",
+                expected_tool=tool_name,
+            )
+
+    # Pydantic model detection (runtime only, no import at module level)
+    if isinstance(schema, type) and hasattr(schema, "model_validate"):
+        for call_id, result in matched_results:
+            try:
+                schema.model_validate(result)
+            except Exception as e:
+                raise _assertion_error(
+                    trace,
+                    f"tool '{tool_name}' result validation failed (call_id: {call_id}): {e}",
+                    expected_tool=tool_name,
+                ) from None
+        return
+
+    for call_id, result in matched_results:
+        context = f"tool '{tool_name}' result field"
+        for field, field_schema in schema.items():
+            if field not in result:
+                raise _assertion_error(
+                    trace,
+                    f"tool '{tool_name}' result missing field '{field}' (call_id: {call_id})",
+                    expected_tool=tool_name,
+                )
+            _validate_schema(result[field], field_schema, field, trace, context)
+
+
+def assert_context_preserved(
+    source: dict[str, Any], child_trace: Trace, *, fields: list[str]
+) -> None:
+    """Verify that specific values survived a handoff.
+
+    Compares source[field] == child_trace.handoff_context[field] for each field.
+    Fails if field is missing on either side or values differ.
+    """
+    ctx = _require_handoff_context(child_trace)
+    for field in fields:
+        if field not in source:
+            raise _assertion_error(
+                child_trace,
+                f"field '{field}' not found in source dict",
+            )
+        if field not in ctx:
+            raise _assertion_error(
+                child_trace,
+                f"field '{field}' not found in handoff_context",
+            )
+        src_val = source[field]
+        recv_val = ctx[field]
+        if src_val != recv_val:
+            raise _assertion_error(
+                child_trace,
+                f"field '{field}' not preserved: source={src_val!r}, received={recv_val!r}",
+            )
 
 
 def assert_called_with(trace: Trace, tool_name: str, **expected_args: Any) -> None:

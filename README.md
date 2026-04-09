@@ -77,11 +77,22 @@ async def test_async_agent():
 |--------|-------------|
 | `assert_called(tool)` | Tool was called at least once |
 | `assert_never_called(tool)` | Tool was never called |
-| `assert_called_before(a, b)` | Tool `a` was called before tool `b` |
+| `assert_called_before(a, b)` | Tool `a` was called before tool `b` (positional) |
 | `assert_tool_succeeded(tool)` | Tool was called and all executions succeeded |
 | `assert_max_turns(n)` | Trace has at most `n` turns |
 | `assert_total_duration_under(ms=N)` | Total trace duration under `N` ms |
 | `assert_matches_baseline()` | Trace matches its golden baseline |
+| `assert_flow(pattern)` | Tool calls match a flow pattern (see below) |
+| `assert_called_times(tool, min=, max=)` | Tool was called between `min` and `max` times |
+| `assert_called_with(tool, **args)` | Tool was called with specific argument values |
+| `assert_handoff_received(parent)` | Session is linked to a parent session |
+| `assert_handoff_has_fields(fields)` | Required fields exist in handoff context |
+| `assert_total_tokens_under(n)` | Total token usage across all turns is under `n` |
+| `assert_cost_under(usd=, model_costs=)` | Estimated cost is under a USD limit |
+| `assert_handoff_matches(schema=)` | Handoff context matches a `{field: type}` schema |
+| `assert_no_extra_fields(allowed=)` | Handoff context has no unexpected fields |
+| `assert_tool_output_matches(tool, schema=)` | Tool results match a `{field: type}` schema |
+| `assert_context_preserved(source, fields=)` | Specific values survived a handoff unchanged |
 
 ## Golden Baselines
 
@@ -108,6 +119,129 @@ s.assert_matches_baseline(ignore_fields={"lookup.timestamp", "arguments"})
 ```
 
 Supported values: `"arguments"` (all args), `"results"` (all results), `"response_text"`, or specific keys like `"tool_name.arg_key"`.
+
+## Flow Patterns
+
+`assert_flow` matches tool calls against a pattern with optional gaps using `...` (Ellipsis). Patterns are anchored to start and end by default:
+
+```python
+# Exact consecutive match
+s.assert_flow(["search", "summarize"])
+
+# Allow any calls between search and summarize
+s.assert_flow(["search", ..., "summarize"])
+
+# Unanchored — match anywhere in the trace
+s.assert_flow([..., "search", ..., "summarize", ...])
+```
+
+## Handoff Integrity
+
+Track parent-child relationships between agent sessions:
+
+```python
+with reagent_flow.session("orchestrator") as parent:
+    parent.log_llm_call(tool_calls=[{"name": "plan", "arguments": {}}])
+    parent.log_tool_result("plan", result="ok")
+
+with reagent_flow.session(
+    "researcher",
+    parent_trace_id=parent.trace.trace_id,
+    handoff_context={"query": "Q3 earnings"},
+) as child:
+    child.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
+    child.log_tool_result("search", result="ok")
+
+child.assert_handoff_received(parent)
+child.assert_handoff_has_fields(["query"])
+```
+
+## Contract Testing
+
+Validate the structure and types of data flowing between agents:
+
+```python
+# Type-check handoff context fields
+child.assert_handoff_matches(schema={"user_id": str, "query": str, "limit": int})
+
+# Detect unexpected fields leaking through handoffs
+child.assert_no_extra_fields(allowed=["user_id", "query", "limit"])
+
+# Validate tool output structure
+s.assert_tool_output_matches("search", schema={"results": list, "count": int})
+
+# Verify values survived a handoff unchanged
+source = {"user_id": "abc123", "query": "revenue Q4"}
+child.assert_context_preserved(source, fields=["user_id", "query"])
+```
+
+**Strict bool/int separation:** A field declared as `int` rejects `True`/`False`, and `bool` rejects `0`/`1`. Python's `bool` subclasses `int`, but contract assertions distinguish them.
+
+### Nested Schemas
+
+`assert_handoff_matches` and `assert_tool_output_matches` support nested structures:
+
+```python
+# Nested dict
+s.assert_handoff_matches(schema={
+    "user": {"id": str, "name": str},
+    "query": str,
+})
+
+# Typed list
+s.assert_handoff_matches(schema={"tags": [str]})
+
+# Union typed list
+s.assert_handoff_matches(schema={"values": [str, int]})
+
+# List of dicts
+s.assert_tool_output_matches("search", schema={
+    "results": [{"id": str, "score": float, "title": str}],
+    "total": int,
+})
+```
+
+Error messages include dot/bracket path notation:
+- `"handoff field 'user.name': expected str, got int"`
+- `"handoff field 'tags[2]': expected str, got int"`
+- `"handoff field 'results[0].score': expected float, got str"`
+
+#### Optional Pydantic Support
+
+When Pydantic is installed, pass a `BaseModel` subclass instead of a dict schema:
+
+```python
+from pydantic import BaseModel
+
+class HandoffSchema(BaseModel):
+    user_id: str
+    query: str
+    tags: list[str]
+
+child.assert_handoff_matches(schema=HandoffSchema)
+```
+
+Pydantic is never imported at module level — detection is purely runtime. Users without Pydantic get identical behavior using dict schemas.
+
+## Token and Cost Guards
+
+Guard against runaway token usage or unexpected costs:
+
+```python
+# Assert total tokens across all turns
+s.assert_total_tokens_under(50_000)
+
+# Assert estimated cost with per-model pricing (USD per 1M tokens)
+s.assert_cost_under(
+    usd=1.00,
+    model_costs={
+        "gpt-4o": {"input": 2.50, "output": 10.00},
+        "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    },
+)
+```
+
+Model names are matched by longest prefix, so `"gpt-4o"` matches `"gpt-4o-2024-08-06"`.
 
 ## Agent Stack Traces
 
