@@ -368,8 +368,7 @@ def _validate_schema(
         if not _strict_isinstance(value, schema):
             raise _assertion_error(
                 trace,
-                f"{context} '{path}': expected {schema.__name__}, "
-                f"got {type(value).__name__}",
+                f"{context} '{path}': expected {schema.__name__}, got {type(value).__name__}",
             )
         return
 
@@ -415,8 +414,7 @@ def _validate_schema(
                 type_names = " | ".join(t.__name__ for t in schema)
                 raise _assertion_error(
                     trace,
-                    f"{context} '{path}[{i}]': expected {type_names}, "
-                    f"got {type(elem).__name__}",
+                    f"{context} '{path}[{i}]': expected {type_names}, got {type(elem).__name__}",
                 )
         return
 
@@ -520,8 +518,7 @@ def assert_tool_output_matches(
             except Exception as e:
                 raise _assertion_error(
                     trace,
-                    f"tool '{tool_name}' result validation failed "
-                    f"(call_id: {call_id}): {e}",
+                    f"tool '{tool_name}' result validation failed (call_id: {call_id}): {e}",
                     expected_tool=tool_name,
                 ) from None
         return
@@ -532,8 +529,7 @@ def assert_tool_output_matches(
             if field not in result:
                 raise _assertion_error(
                     trace,
-                    f"tool '{tool_name}' result missing field '{field}' "
-                    f"(call_id: {call_id})",
+                    f"tool '{tool_name}' result missing field '{field}' (call_id: {call_id})",
                     expected_tool=tool_name,
                 )
             _validate_schema(result[field], field_schema, field, trace, context)
@@ -564,8 +560,7 @@ def assert_context_preserved(
         if src_val != recv_val:
             raise _assertion_error(
                 child_trace,
-                f"field '{field}' not preserved: source={src_val!r}, "
-                f"received={recv_val!r}",
+                f"field '{field}' not preserved: source={src_val!r}, received={recv_val!r}",
             )
 
 

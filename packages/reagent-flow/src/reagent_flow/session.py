@@ -236,9 +236,7 @@ class Session:
         self._sync_trace()
         assert_tool_output_matches(self.trace, tool_name, schema=schema)
 
-    def assert_context_preserved(
-        self, source: dict[str, Any], *, fields: list[str]
-    ) -> None:
+    def assert_context_preserved(self, source: dict[str, Any], *, fields: list[str]) -> None:
         """Assert that specific values survived a handoff."""
         from reagent_flow.assertions import assert_context_preserved
 
