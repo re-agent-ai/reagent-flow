@@ -211,6 +211,40 @@ class Session:
             self.trace, usd=usd, model_costs=model_costs, allow_unpriced=allow_unpriced
         )
 
+    def assert_handoff_matches(
+        self, *, schema: dict[str, type | dict[str, Any] | list[Any]]
+    ) -> None:
+        """Assert that handoff_context matches a schema."""
+        from reagent_flow.assertions import assert_handoff_matches
+
+        self._sync_trace()
+        assert_handoff_matches(self.trace, schema=schema)
+
+    def assert_no_extra_fields(self, *, allowed: list[str]) -> None:
+        """Assert that handoff_context has no unexpected fields."""
+        from reagent_flow.assertions import assert_no_extra_fields
+
+        self._sync_trace()
+        assert_no_extra_fields(self.trace, allowed=allowed)
+
+    def assert_tool_output_matches(
+        self, tool_name: str, *, schema: dict[str, type | dict[str, Any] | list[Any]]
+    ) -> None:
+        """Assert that tool results match a schema."""
+        from reagent_flow.assertions import assert_tool_output_matches
+
+        self._sync_trace()
+        assert_tool_output_matches(self.trace, tool_name, schema=schema)
+
+    def assert_context_preserved(
+        self, source: dict[str, Any], *, fields: list[str]
+    ) -> None:
+        """Assert that specific values survived a handoff."""
+        from reagent_flow.assertions import assert_context_preserved
+
+        self._sync_trace()
+        assert_context_preserved(source, self.trace, fields=fields)
+
     # -- Async context manager support --
 
     async def __aenter__(self) -> Session:

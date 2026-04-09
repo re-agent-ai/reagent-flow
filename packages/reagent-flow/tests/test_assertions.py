@@ -1,16 +1,21 @@
 """Tests for assertion engine."""
 
 import warnings
+from typing import Any
 
 import pytest
 import reagent_flow
 from reagent_flow.assertions import (
     assert_called_times,
     assert_called_with,
+    assert_context_preserved,
     assert_cost_under,
     assert_flow,
     assert_handoff_has_fields,
+    assert_handoff_matches,
     assert_handoff_received,
+    assert_no_extra_fields,
+    assert_tool_output_matches,
     assert_total_tokens_under,
 )
 from reagent_flow.exceptions import ReagentWarning
@@ -601,3 +606,524 @@ def test_cost_all_unpriced_allow() -> None:
         warnings.simplefilter("always")
         assert_cost_under(tr, usd=0.01, model_costs=COSTS, allow_unpriced=True)
     assert any(issubclass(w.category, ReagentWarning) for w in caught)
+
+
+# ---------------------------------------------------------------------------
+# assert_handoff_matches tests (v0.3)
+# ---------------------------------------------------------------------------
+
+
+def test_handoff_matches_valid() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc", "query": "test", "limit": 5},
+    )
+    assert_handoff_matches(child, schema={"user_id": str, "query": str, "limit": int})
+
+
+def test_handoff_matches_missing_field() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc"},
+    )
+    with pytest.raises(AssertionError, match="query"):
+        assert_handoff_matches(child, schema={"user_id": str, "query": str})
+
+
+def test_handoff_matches_wrong_type() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": 123, "query": "test"},
+    )
+    with pytest.raises(AssertionError, match="expected str, got int"):
+        assert_handoff_matches(child, schema={"user_id": str, "query": str})
+
+
+def test_handoff_matches_none_context() -> None:
+    child = Trace(trace_id="c1", name="researcher")
+    with pytest.raises(AssertionError, match="no handoff_context"):
+        assert_handoff_matches(child, schema={"user_id": str})
+
+
+def test_handoff_matches_non_dict_context() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context="not a dict",  # type: ignore[arg-type]
+    )
+    with pytest.raises(AssertionError, match="must be a dict"):
+        assert_handoff_matches(child, schema={"user_id": str})
+
+
+def test_handoff_matches_empty_schema() -> None:
+    """Empty schema should always pass."""
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc"},
+    )
+    assert_handoff_matches(child, schema={})
+
+
+def test_handoff_matches_bool_not_accepted_as_int() -> None:
+    """bool subclasses int in Python, but contracts should distinguish them."""
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"count": True},
+    )
+    with pytest.raises(AssertionError, match="expected int, got bool"):
+        assert_handoff_matches(child, schema={"count": int})
+
+
+def test_handoff_matches_int_not_accepted_as_bool() -> None:
+    """int should not satisfy a bool contract."""
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"active": 1},
+    )
+    with pytest.raises(AssertionError, match="expected bool, got int"):
+        assert_handoff_matches(child, schema={"active": bool})
+
+
+# ---------------------------------------------------------------------------
+# assert_no_extra_fields tests (v0.3)
+# ---------------------------------------------------------------------------
+
+
+def test_no_extra_fields_all_allowed() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc", "query": "test"},
+    )
+    assert_no_extra_fields(child, allowed=["user_id", "query"])
+
+
+def test_no_extra_fields_extra_present() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc", "debug_info": "x", "internal_id": "y"},
+    )
+    with pytest.raises(AssertionError, match="debug_info"):
+        assert_no_extra_fields(child, allowed=["user_id"])
+
+
+def test_no_extra_fields_reports_all_extras() -> None:
+    """Error should report ALL unexpected keys, not just the first."""
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc", "debug_info": "x", "internal_id": "y"},
+    )
+    with pytest.raises(AssertionError, match="internal_id"):
+        assert_no_extra_fields(child, allowed=["user_id"])
+
+
+def test_no_extra_fields_none_context() -> None:
+    child = Trace(trace_id="c1", name="researcher")
+    with pytest.raises(AssertionError, match="no handoff_context"):
+        assert_no_extra_fields(child, allowed=["user_id"])
+
+
+def test_no_extra_fields_empty_allowed_nonempty_context() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc"},
+    )
+    with pytest.raises(AssertionError, match="user_id"):
+        assert_no_extra_fields(child, allowed=[])
+
+
+# ---------------------------------------------------------------------------
+# assert_tool_output_matches tests (v0.3)
+# ---------------------------------------------------------------------------
+
+
+def _session_with_tool_results(
+    *calls: tuple[str, dict[str, Any] | None, str | None],
+) -> reagent_flow.Session:
+    """Create a session with tool calls that have specific results.
+
+    Each call is (tool_name, result_dict_or_None, error_or_None).
+    """
+    s = reagent_flow.session("test")
+    s.__enter__()
+    for name, result, error in calls:
+        ids = s.log_llm_call(tool_calls=[{"name": name, "arguments": {}}])
+        s.log_tool_result(
+            name,
+            call_id=ids[0],
+            result=result,
+            **({"error": error} if error else {}),
+        )
+    s.__exit__(None, None, None)
+    return s
+
+
+def test_tool_output_matches_single_call() -> None:
+    s = _session_with_tool_results(("search", {"results": ["a"], "count": 1}, None))
+    assert_tool_output_matches(s.trace, "search", schema={"results": list, "count": int})
+
+
+def test_tool_output_matches_wrong_type() -> None:
+    s = _session_with_tool_results(("search", {"results": "not a list", "count": 1}, None))
+    with pytest.raises(AssertionError, match="expected list, got str"):
+        assert_tool_output_matches(s.trace, "search", schema={"results": list, "count": int})
+
+
+def test_tool_output_matches_multiple_calls_all_match() -> None:
+    s = _session_with_tool_results(
+        ("search", {"results": ["a"], "count": 1}, None),
+        ("search", {"results": ["b"], "count": 2}, None),
+    )
+    assert_tool_output_matches(s.trace, "search", schema={"results": list, "count": int})
+
+
+def test_tool_output_matches_multiple_calls_one_fails() -> None:
+    s = _session_with_tool_results(
+        ("search", {"results": ["a"], "count": 1}, None),
+        ("search", {"results": "bad", "count": 2}, None),
+    )
+    with pytest.raises(AssertionError, match="expected list, got str"):
+        assert_tool_output_matches(s.trace, "search", schema={"results": list, "count": int})
+
+
+def test_tool_output_matches_tool_never_called() -> None:
+    s = _session_with_tool_results(("lookup", {"id": "1"}, None))
+    with pytest.raises(AssertionError, match="never called"):
+        assert_tool_output_matches(s.trace, "search", schema={"results": list})
+
+
+def test_tool_output_matches_result_not_dict() -> None:
+    s = _session_with_tool_results(("search", "plain string", None))
+    with pytest.raises(AssertionError, match="not a dict"):
+        assert_tool_output_matches(s.trace, "search", schema={"results": list})
+
+
+def test_tool_output_matches_errored_call_skipped() -> None:
+    """Errored calls should be skipped — only successful results validated."""
+    s = _session_with_tool_results(
+        ("search", None, "timeout"),
+        ("search", {"results": ["a"], "count": 1}, None),
+    )
+    assert_tool_output_matches(s.trace, "search", schema={"results": list, "count": int})
+
+
+def test_tool_output_matches_missing_field() -> None:
+    s = _session_with_tool_results(("search", {"results": ["a"]}, None))
+    with pytest.raises(AssertionError, match="count"):
+        assert_tool_output_matches(s.trace, "search", schema={"results": list, "count": int})
+
+
+# ---------------------------------------------------------------------------
+# assert_context_preserved tests (v0.3)
+# ---------------------------------------------------------------------------
+
+
+def test_context_preserved_all_match() -> None:
+    source = {"user_id": "abc123", "query": "revenue Q4", "org": "acme"}
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc123", "query": "revenue Q4", "extra": "ok"},
+    )
+    assert_context_preserved(source, child, fields=["user_id", "query"])
+
+
+def test_context_preserved_value_changed() -> None:
+    source = {"user_id": "abc123"}
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "xyz789"},
+    )
+    with pytest.raises(AssertionError, match="not preserved"):
+        assert_context_preserved(source, child, fields=["user_id"])
+
+
+def test_context_preserved_missing_in_source() -> None:
+    source = {"query": "test"}
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc", "query": "test"},
+    )
+    with pytest.raises(AssertionError, match="user_id"):
+        assert_context_preserved(source, child, fields=["user_id"])
+
+
+def test_context_preserved_missing_in_handoff() -> None:
+    source = {"user_id": "abc123", "query": "test"}
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"query": "test"},
+    )
+    with pytest.raises(AssertionError, match="user_id"):
+        assert_context_preserved(source, child, fields=["user_id"])
+
+
+def test_context_preserved_none_handoff() -> None:
+    source = {"user_id": "abc123"}
+    child = Trace(trace_id="c1", name="researcher")
+    with pytest.raises(AssertionError, match="no handoff_context"):
+        assert_context_preserved(source, child, fields=["user_id"])
+
+
+# ---------------------------------------------------------------------------
+# v0.4 nested schema validation tests
+# ---------------------------------------------------------------------------
+
+
+def test_handoff_matches_nested_dict() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user": {"id": "abc", "name": "Alice"}, "query": "test"},
+    )
+    assert_handoff_matches(child, schema={"user": {"id": str, "name": str}, "query": str})
+
+
+def test_handoff_matches_nested_dict_wrong_type() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user": {"id": "abc", "name": 123}},
+    )
+    with pytest.raises(AssertionError, match="user.name"):
+        assert_handoff_matches(child, schema={"user": {"id": str, "name": str}})
+
+
+def test_handoff_matches_typed_list() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"tags": ["python", "ai", "ml"]},
+    )
+    assert_handoff_matches(child, schema={"tags": [str]})
+
+
+def test_handoff_matches_typed_list_wrong_element() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"tags": ["python", 42, "ml"]},
+    )
+    with pytest.raises(AssertionError, match=r"tags\[1\]"):
+        assert_handoff_matches(child, schema={"tags": [str]})
+
+
+def test_handoff_matches_union_list() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"values": ["hello", 42, "world"]},
+    )
+    assert_handoff_matches(child, schema={"values": [str, int]})
+
+
+def test_handoff_matches_union_list_invalid() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"values": ["hello", 3.14]},
+    )
+    with pytest.raises(AssertionError, match=r"values\[1\]"):
+        assert_handoff_matches(child, schema={"values": [str, int]})
+
+
+def test_handoff_matches_list_of_dicts() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={
+            "results": [
+                {"id": "a1", "score": 0.95},
+                {"id": "a2", "score": 0.87},
+            ]
+        },
+    )
+    assert_handoff_matches(child, schema={"results": [{"id": str, "score": float}]})
+
+
+def test_handoff_matches_list_of_dicts_invalid() -> None:
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={
+            "results": [
+                {"id": "a1", "score": 0.95},
+                {"id": "a2", "score": "bad"},
+            ]
+        },
+    )
+    with pytest.raises(AssertionError, match=r"results\[1\]\.score"):
+        assert_handoff_matches(child, schema={"results": [{"id": str, "score": float}]})
+
+
+def test_handoff_matches_deep_nesting() -> None:
+    """3+ levels of nesting."""
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={
+            "config": {
+                "db": {
+                    "host": "localhost",
+                    "port": 5432,
+                },
+            },
+        },
+    )
+    assert_handoff_matches(
+        child,
+        schema={"config": {"db": {"host": str, "port": int}}},
+    )
+
+
+def test_handoff_matches_deep_nesting_error_path() -> None:
+    """Error path should use dot notation for deep nesting."""
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={
+            "config": {"db": {"host": "localhost", "port": "bad"}},
+        },
+    )
+    with pytest.raises(AssertionError, match="config.db.port"):
+        assert_handoff_matches(
+            child,
+            schema={"config": {"db": {"host": str, "port": int}}},
+        )
+
+
+def test_handoff_matches_flat_still_works() -> None:
+    """v0.3 flat schemas must continue to work unchanged (backward compat)."""
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc", "count": 5},
+    )
+    assert_handoff_matches(child, schema={"user_id": str, "count": int})
+
+
+def test_tool_output_matches_nested() -> None:
+    """assert_tool_output_matches should also support nested schemas."""
+    s = _session_with_tool_results(
+        ("search", {"results": [{"id": "a1", "score": 0.9}], "total": 1}, None),
+    )
+    assert_tool_output_matches(
+        s.trace,
+        "search",
+        schema={"results": [{"id": str, "score": float}], "total": int},
+    )
+
+
+def test_tool_output_matches_nested_invalid() -> None:
+    s = _session_with_tool_results(
+        ("search", {"results": [{"id": "a1", "score": "bad"}], "total": 1}, None),
+    )
+    with pytest.raises(AssertionError, match=r"results\[0\]\.score"):
+        assert_tool_output_matches(
+            s.trace,
+            "search",
+            schema={"results": [{"id": str, "score": float}], "total": int},
+        )
+
+
+# ---------------------------------------------------------------------------
+# v0.4 Pydantic support tests
+# ---------------------------------------------------------------------------
+
+_has_pydantic = False
+try:
+    import pydantic  # noqa: F401
+
+    _has_pydantic = True
+except ImportError:
+    pass
+
+
+@pytest.mark.skipif(not _has_pydantic, reason="pydantic not installed")
+def test_handoff_matches_pydantic_valid() -> None:
+    from pydantic import BaseModel
+
+    class HandoffSchema(BaseModel):
+        user_id: str
+        query: str
+
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": "abc", "query": "test"},
+    )
+    assert_handoff_matches(child, schema=HandoffSchema)  # type: ignore[arg-type]
+
+
+@pytest.mark.skipif(not _has_pydantic, reason="pydantic not installed")
+def test_handoff_matches_pydantic_invalid() -> None:
+    from pydantic import BaseModel
+
+    class HandoffSchema(BaseModel):
+        user_id: str
+        query: str
+
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": 123, "query": "test"},
+    )
+    with pytest.raises(AssertionError, match="user_id"):
+        assert_handoff_matches(child, schema=HandoffSchema)  # type: ignore[arg-type]
+
+
+@pytest.mark.skipif(not _has_pydantic, reason="pydantic not installed")
+def test_tool_output_matches_pydantic() -> None:
+    from pydantic import BaseModel
+
+    class ResultSchema(BaseModel):
+        results: list[str]
+        count: int
+
+    s = _session_with_tool_results(
+        ("search", {"results": ["a", "b"], "count": 2}, None),
+    )
+    assert_tool_output_matches(s.trace, "search", schema=ResultSchema)  # type: ignore[arg-type]
+
+
+@pytest.mark.skipif(not _has_pydantic, reason="pydantic not installed")
+def test_tool_output_matches_pydantic_invalid() -> None:
+    from pydantic import BaseModel
+
+    class ResultSchema(BaseModel):
+        results: list[str]
+        count: int
+
+    s = _session_with_tool_results(
+        ("search", {"results": "not a list", "count": 2}, None),
+    )
+    with pytest.raises(AssertionError):
+        assert_tool_output_matches(s.trace, "search", schema=ResultSchema)  # type: ignore[arg-type]
+
+
+def test_handoff_matches_no_pydantic_falls_back_to_dict() -> None:
+    """When schema is a plain dict, Pydantic code path is never entered.
+
+    This exercises the non-Pydantic path even when pydantic IS installed,
+    ensuring the dict-based validation is not accidentally broken.
+    """
+    child = Trace(
+        trace_id="c1",
+        name="researcher",
+        handoff_context={"user_id": 123, "query": "test"},
+    )
+    # Even if pydantic is installed, a dict schema must use our validation
+    with pytest.raises(AssertionError, match="expected str, got int"):
+        assert_handoff_matches(child, schema={"user_id": str, "query": str})

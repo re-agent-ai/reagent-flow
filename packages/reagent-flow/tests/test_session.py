@@ -184,6 +184,56 @@ def test_session_assert_cost_under() -> None:
     s.assert_cost_under(usd=1.00, model_costs={"gpt-4o": {"input": 2.50, "output": 10.00}})
 
 
+# ---------------------------------------------------------------------------
+# v0.3 session wrapper tests
+# ---------------------------------------------------------------------------
+
+
+def test_session_assert_handoff_matches() -> None:
+    """assert_handoff_matches wrapper works on Session."""
+    with reagent_flow.session(
+        "researcher",
+        parent_trace_id="p1",
+        handoff_context={"user_id": "abc", "query": "test"},
+    ) as s:
+        s.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
+        s.log_tool_result("search", result="ok")
+    s.assert_handoff_matches(schema={"user_id": str, "query": str})
+
+
+def test_session_assert_no_extra_fields() -> None:
+    """assert_no_extra_fields wrapper works on Session."""
+    with reagent_flow.session(
+        "researcher",
+        parent_trace_id="p1",
+        handoff_context={"user_id": "abc", "query": "test"},
+    ) as s:
+        s.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
+        s.log_tool_result("search", result="ok")
+    s.assert_no_extra_fields(allowed=["user_id", "query"])
+
+
+def test_session_assert_tool_output_matches() -> None:
+    """assert_tool_output_matches wrapper works on Session."""
+    with reagent_flow.session("test") as s:
+        ids = s.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
+        s.log_tool_result("search", call_id=ids[0], result={"results": ["a"], "count": 1})
+    s.assert_tool_output_matches("search", schema={"results": list, "count": int})
+
+
+def test_session_assert_context_preserved() -> None:
+    """assert_context_preserved wrapper works on Session."""
+    source = {"user_id": "abc123", "query": "revenue"}
+    with reagent_flow.session(
+        "researcher",
+        parent_trace_id="p1",
+        handoff_context={"user_id": "abc123", "query": "revenue", "extra": "ok"},
+    ) as s:
+        s.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
+        s.log_tool_result("search", result="ok")
+    s.assert_context_preserved(source, fields=["user_id", "query"])
+
+
 @pytest.mark.asyncio
 async def test_async_session_context_manager() -> None:
     """Session should work as an async context manager."""

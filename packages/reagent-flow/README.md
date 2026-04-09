@@ -89,6 +89,10 @@ async def test_async_agent():
 | `assert_handoff_has_fields(fields)` | Required fields exist in handoff context |
 | `assert_total_tokens_under(n)` | Total token usage across all turns is under `n` |
 | `assert_cost_under(usd=, model_costs=)` | Estimated cost is under a USD limit |
+| `assert_handoff_matches(schema=)` | Handoff context matches a `{field: type}` schema |
+| `assert_no_extra_fields(allowed=)` | Handoff context has no unexpected fields |
+| `assert_tool_output_matches(tool, schema=)` | Tool results match a `{field: type}` schema |
+| `assert_context_preserved(source, fields=)` | Specific values survived a handoff unchanged |
 
 ## Golden Baselines
 
@@ -151,6 +155,73 @@ with reagent_flow.session(
 child.assert_handoff_received(parent)
 child.assert_handoff_has_fields(["query"])
 ```
+
+## Contract Testing
+
+Validate the structure and types of data flowing between agents:
+
+```python
+# Type-check handoff context fields
+child.assert_handoff_matches(schema={"user_id": str, "query": str, "limit": int})
+
+# Detect unexpected fields leaking through handoffs
+child.assert_no_extra_fields(allowed=["user_id", "query", "limit"])
+
+# Validate tool output structure
+s.assert_tool_output_matches("search", schema={"results": list, "count": int})
+
+# Verify values survived a handoff unchanged
+source = {"user_id": "abc123", "query": "revenue Q4"}
+child.assert_context_preserved(source, fields=["user_id", "query"])
+```
+
+**Strict bool/int separation:** A field declared as `int` rejects `True`/`False`, and `bool` rejects `0`/`1`. Python's `bool` subclasses `int`, but contract assertions distinguish them.
+
+### Nested Schemas
+
+`assert_handoff_matches` and `assert_tool_output_matches` support nested structures:
+
+```python
+# Nested dict
+s.assert_handoff_matches(schema={
+    "user": {"id": str, "name": str},
+    "query": str,
+})
+
+# Typed list
+s.assert_handoff_matches(schema={"tags": [str]})
+
+# Union typed list
+s.assert_handoff_matches(schema={"values": [str, int]})
+
+# List of dicts
+s.assert_tool_output_matches("search", schema={
+    "results": [{"id": str, "score": float, "title": str}],
+    "total": int,
+})
+```
+
+Error messages include dot/bracket path notation:
+- `"handoff field 'user.name': expected str, got int"`
+- `"handoff field 'tags[2]': expected str, got int"`
+- `"handoff field 'results[0].score': expected float, got str"`
+
+#### Optional Pydantic Support
+
+When Pydantic is installed, pass a `BaseModel` subclass instead of a dict schema:
+
+```python
+from pydantic import BaseModel
+
+class HandoffSchema(BaseModel):
+    user_id: str
+    query: str
+    tags: list[str]
+
+child.assert_handoff_matches(schema=HandoffSchema)
+```
+
+Pydantic is never imported at module level — detection is purely runtime. Users without Pydantic get identical behavior using dict schemas.
 
 ## Token and Cost Guards
 
