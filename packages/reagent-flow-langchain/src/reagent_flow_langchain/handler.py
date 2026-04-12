@@ -2,12 +2,37 @@
 
 from __future__ import annotations
 
+import json
 import warnings
 from typing import Any
 from uuid import UUID
 
 from reagent_flow._context import get_active_session
 from reagent_flow.exceptions import ReagentAdapterWarning
+
+
+def _unwrap_tool_output(output: Any) -> Any:
+    """Unwrap a LangChain tool output for reagent-flow storage.
+
+    When LangChain invokes a tool with a ``tool_call_id`` (the standard
+    ReAct / LangGraph path) it wraps the tool's return value in a
+    ``ToolMessage``. reagent-flow wants the raw return value so that
+    contract assertions can inspect structured fields. This helper:
+
+    1. Extracts ``.content`` from message-like objects.
+    2. Parses JSON strings into dicts/lists so that schema contracts
+       written as ``{"field": type}`` work directly.
+    3. Leaves everything else unchanged.
+    """
+    content = getattr(output, "content", output)
+    if isinstance(content, str):
+        stripped = content.strip()
+        if stripped.startswith(("{", "[")):
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError:
+                return content
+    return content
 
 
 class ReagentCallbackHandler:
@@ -114,13 +139,22 @@ class ReagentCallbackHandler:
 
     def on_tool_end(
         self,
-        output: str,
+        output: Any,
         *,
         run_id: UUID,
         parent_run_id: UUID | None = None,
         **kwargs: Any,
     ) -> None:
-        """Handle tool execution completion."""
+        """Handle tool execution completion.
+
+        LangChain wraps tool return values in a ``ToolMessage`` when a
+        ``tool_call_id`` is present (the normal ReAct / LangGraph path).
+        We unwrap to the inner ``.content`` so that downstream contract
+        assertions (``assert_tool_output_matches``) can inspect the real
+        tool return value. JSON string contents are parsed into a dict so
+        contracts written in terms of fields (``{"key": type}``) work out
+        of the box.
+        """
         session = get_active_session()
         if session is None:
             return
@@ -128,7 +162,7 @@ class ReagentCallbackHandler:
         try:
             name = kwargs.get("name", "unknown_tool")
             call_id = self._pop_call_id(name, run_id)
-            session.log_tool_result(name, result=output, call_id=call_id)
+            session.log_tool_result(name, result=_unwrap_tool_output(output), call_id=call_id)
         except Exception as e:
             warnings.warn(
                 ReagentAdapterWarning(f"Failed to capture LangChain tool result: {e}"),
