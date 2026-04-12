@@ -1,9 +1,19 @@
-"""Release Risk Gatekeeper tools.
+"""Release Risk Gatekeeper tools — one tool per sub-agent.
 
-Three tools that a LangGraph ReAct agent uses to evaluate release safety.
-`get_release_info` returns hardcoded but realistic CI/CD data.
-`assess_risk` and `make_decision` are pass-through tools whose output
-is determined by the LLM's reasoning.
+Three LangGraph ReAct agents cooperate to evaluate a release:
+
+    Gatherer (get_release_info)
+        -> handoff -> Assessor (assess_risk)
+                          -> handoff -> Decider (make_decision)
+
+Each agent owns exactly one tool. The orchestrator in ``orchestrator.py``
+extracts structured output from each stage and passes it to the next as
+``handoff_context`` so reagent-flow can validate the contract between
+agents.
+
+``get_release_info_drifted`` is a deliberately broken variant used by the
+"caught before release" demo scenario — it renames ``issues.open_p0`` and
+drops ``issues.open_p1`` to simulate an upstream refactor gone wrong.
 """
 
 from __future__ import annotations
@@ -18,21 +28,14 @@ from langchain_core.tools import tool
 
 RELEASES: dict[str, dict] = {
     "v2.3.1": {
-        "version": "v2.3.1",
-        "git": {
-            "branch": "release/2.3.1",
-            "commits_since_last_release": 14,
-            "authors": ["alice", "bob", "charlie"],
-        },
+        "release_version": "v2.3.1",
+        "branch": "release/2.3.1",
         "ci": {
             "pipeline": "passed",
-            "test_suites": {
-                "unit": {"passed": 312, "failed": 0, "skipped": 4},
-                "integration": {"passed": 87, "failed": 2, "skipped": 0},
-                "e2e": {"passed": 45, "failed": 1, "skipped": 2},
-            },
             "coverage": 87.3,
-            "build_duration_sec": 342,
+            "unit_failed": 0,
+            "integration_failed": 2,
+            "e2e_failed": 1,
         },
         "issues": {
             "open_p0": 1,
@@ -40,67 +43,19 @@ RELEASES: dict[str, dict] = {
             "resolved_this_release": 12,
         },
         "deploy_history": [
-            {
-                "version": "v2.3.0",
-                "date": "2026-03-24",
-                "status": "stable",
-                "rollback": False,
-            },
-            {
-                "version": "v2.2.9",
-                "date": "2026-03-18",
-                "status": "rolled_back",
-                "rollback": True,
-            },
-        ],
-    },
-    "v2.3.2": {
-        "version": "v2.3.2",
-        "git": {
-            "branch": "hotfix/2.3.2",
-            "commits_since_last_release": 2,
-            "authors": ["alice"],
-        },
-        "ci": {
-            "pipeline": "passed",
-            "test_suites": {
-                "unit": {"passed": 316, "failed": 0, "skipped": 4},
-                "integration": {"passed": 89, "failed": 0, "skipped": 0},
-                "e2e": {"passed": 48, "failed": 0, "skipped": 0},
-            },
-            "coverage": 88.1,
-            "build_duration_sec": 298,
-        },
-        "issues": {
-            "open_p0": 0,
-            "open_p1": 2,
-            "resolved_this_release": 1,
-        },
-        "deploy_history": [
-            {
-                "version": "v2.3.1",
-                "date": "2026-03-25",
-                "status": "stable",
-                "rollback": False,
-            },
+            {"version": "v2.3.0", "date": "2026-03-24", "status": "stable", "rollback": False},
+            {"version": "v2.2.9", "date": "2026-03-18", "status": "rolled_back", "rollback": True},
         ],
     },
     "v2.4.0": {
-        "version": "v2.4.0",
-        "git": {
-            "branch": "release/2.4.0",
-            "commits_since_last_release": 31,
-            "authors": ["alice", "bob", "charlie", "diana"],
-        },
+        "release_version": "v2.4.0",
+        "branch": "release/2.4.0",
         "ci": {
             "pipeline": "passed",
-            "test_suites": {
-                "unit": {"passed": 340, "failed": 0, "skipped": 3},
-                "integration": {"passed": 92, "failed": 0, "skipped": 0},
-                "e2e": {"passed": 51, "failed": 0, "skipped": 1},
-            },
             "coverage": 91.2,
-            "build_duration_sec": 310,
+            "unit_failed": 0,
+            "integration_failed": 0,
+            "e2e_failed": 0,
         },
         "issues": {
             "open_p0": 0,
@@ -108,30 +63,24 @@ RELEASES: dict[str, dict] = {
             "resolved_this_release": 18,
         },
         "deploy_history": [
-            {
-                "version": "v2.3.2",
-                "date": "2026-03-26",
-                "status": "stable",
-                "rollback": False,
-            },
-            {
-                "version": "v2.3.1",
-                "date": "2026-03-25",
-                "status": "stable",
-                "rollback": False,
-            },
+            {"version": "v2.3.2", "date": "2026-03-26", "status": "stable", "rollback": False},
+            {"version": "v2.3.1", "date": "2026-03-25", "status": "stable", "rollback": False},
         ],
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Stable tools — one per sub-agent
+# ---------------------------------------------------------------------------
 
 
 @tool
 def get_release_info(version: str) -> str:
     """Look up release information from CI/CD systems.
 
-    Returns test results, coverage, open issues, and deployment history
-    for the given release version. Use this tool FIRST to gather data
-    before assessing risk.
+    Returns a JSON object with branch, CI test results, open issue counts,
+    and deployment history for the given release version.
 
     Args:
         version: The release version to look up (e.g., "v2.3.1").
@@ -139,32 +88,89 @@ def get_release_info(version: str) -> str:
     data = RELEASES.get(version)
     if data is None:
         return json.dumps({"error": f"Release {version} not found"})
-    return json.dumps(data, indent=2)
+    return json.dumps(data)
 
 
 @tool
-def assess_risk(release_info: str) -> str:
-    """Assess the risk level of a release based on its information.
+def assess_risk(release_version: str, risk_level: str, justification: str) -> str:
+    """Record a risk assessment for a release.
 
-    Tracing checkpoint: the LLM produces a risk assessment (LOW/MEDIUM/HIGH
-    with justification) as the argument. The tool returns it unchanged so
-    reagent-flow records it as a distinct step in the trace.
+    The LLM reasons about the release data passed to it and fills in the
+    structured fields. The tool echoes the assessment so reagent-flow can
+    capture it from the trace and hand it off to the decision agent.
 
     Args:
-        release_info: The LLM's risk analysis of the release data.
+        release_version: The version being assessed.
+        risk_level: One of "LOW", "MEDIUM", or "HIGH".
+        justification: A short explanation for the assigned risk level.
     """
-    return release_info
+    return json.dumps(
+        {
+            "release_version": release_version,
+            "risk_level": risk_level,
+            "justification": justification,
+        }
+    )
 
 
 @tool
-def make_decision(risk_assessment: str) -> str:
-    """Make a final deployment decision: APPROVE or BLOCK.
+def make_decision(release_version: str, decision: str, reason: str) -> str:
+    """Record the final deployment decision.
 
-    Tracing checkpoint: the LLM produces an APPROVE/BLOCK decision as the
-    argument. The tool returns it unchanged so reagent-flow records it as
-    a distinct step in the trace.
+    The LLM uses the upstream risk assessment to choose APPROVE or BLOCK
+    and provides a short reason. The tool echoes the decision so it lands
+    in the trace as a distinct step.
 
     Args:
-        risk_assessment: The LLM's deployment decision with justification.
+        release_version: The version being decided on.
+        decision: Either "APPROVE" or "BLOCK".
+        reason: A short explanation for the decision.
     """
-    return risk_assessment
+    return json.dumps(
+        {
+            "release_version": release_version,
+            "decision": decision,
+            "reason": reason,
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
+# Drifted gatherer — simulates an upstream refactor that breaks the contract
+# ---------------------------------------------------------------------------
+
+
+def _drift_release(data: dict) -> dict:
+    """Return a copy of release data with the ``issues`` block refactored.
+
+    Simulates a real-world drift: the upstream team renamed ``open_p0`` to
+    ``p0_count`` and dropped ``open_p1`` entirely. Downstream agents may
+    keep running — the LLM is lenient — but the handoff contract will catch
+    it.
+    """
+    drifted = {k: v for k, v in data.items() if k != "issues"}
+    drifted["issues"] = {
+        "p0_count": data["issues"]["open_p0"],
+        "resolved_this_release": data["issues"]["resolved_this_release"],
+    }
+    return drifted
+
+
+@tool("get_release_info")
+def get_release_info_drifted(version: str) -> str:
+    """Look up release information (drifted schema — simulated regression).
+
+    Same purpose and name as ``get_release_info`` — the upstream team
+    shipped a refactor of the same tool — but this variant's ``issues``
+    block has been renamed: ``open_p0`` is now ``p0_count`` and
+    ``open_p1`` has been removed. Used by the demo's "broken handoff"
+    scenario to show reagent-flow catching upstream drift exactly the
+    way it happens in the real world (same tool name, different shape).
+
+    Args:
+        version: The release version to look up (e.g., "v2.3.1").
+    """
+    data = RELEASES.get(version)
+    if data is None:
+        return json.dumps({"error": f"Release {version} not found"})
+    return json.dumps(_drift_release(data))

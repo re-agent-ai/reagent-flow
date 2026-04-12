@@ -154,3 +154,168 @@ def test_patch_multiple_tool_use_blocks() -> None:
     assert len(tcs) == 2
     assert tcs[0].name == "search"
     assert tcs[1].name == "lookup"
+
+
+def _make_response(
+    tool_blocks: list | None = None, text: str | None = None, model: str = "claude-sonnet-4"
+) -> MagicMock:
+    """Build a canned Anthropic response object."""
+    response = MagicMock()
+    response.model = model
+    content: list = []
+    if text:
+        content.append(_make_text_block(text))
+    if tool_blocks:
+        content.extend(tool_blocks)
+    response.content = content
+    usage = MagicMock()
+    usage.input_tokens = 10
+    usage.output_tokens = 5
+    response.usage = usage
+    return response
+
+
+def test_patch_captures_tool_result_from_followup_messages() -> None:
+    """Tool results sent back in the next create() call are logged to the prior turn."""
+    tool_block = _make_tool_use_block("lookup_order", {"id": "A-1"}, "toolu_abc")
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        _make_response(tool_blocks=[tool_block]),
+        _make_response(text="Order A-1 is shipped."),
+    ]
+    patched = patch(client)
+
+    with reagent_flow.session("anthropic-toolresult") as s:
+        patched.messages.create(
+            model="claude-sonnet-4-20250514",
+            messages=[{"role": "user", "content": "hi"}],
+            max_tokens=100,
+        )
+        patched.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[
+                {"role": "user", "content": "hi"},
+                {
+                    "role": "assistant",
+                    "content": [{"type": "tool_use", "id": "toolu_abc", "name": "lookup_order"}],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_abc",
+                            "content": '{"status": "shipped", "eta_days": 2}',
+                        }
+                    ],
+                },
+            ],
+        )
+
+    assert len(s.trace.turns) == 2
+    turn0 = s.trace.turns[0]
+    assert len(turn0.tool_results) == 1
+    tr = turn0.tool_results[0]
+    assert tr.call_id == "toolu_abc"
+    assert tr.result == {"status": "shipped", "eta_days": 2}
+    assert s.trace.turns[1].tool_results == []
+
+
+def test_patch_tool_result_assert_tool_output_matches() -> None:
+    """The captured tool result satisfies assert_tool_output_matches."""
+    tool_block = _make_tool_use_block("get_release_info", {"version": "v2.3.1"}, "toolu_r1")
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        _make_response(tool_blocks=[tool_block]),
+        _make_response(text="done"),
+    ]
+    patched = patch(client)
+
+    with reagent_flow.session("anthropic-schema") as s:
+        patched.messages.create(model="claude-sonnet-4", messages=[], max_tokens=100)
+        patched.messages.create(
+            model="claude-sonnet-4",
+            max_tokens=100,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_r1",
+                            "content": '{"release_version": "v2.3.1", "open_p0": 1}',
+                        }
+                    ],
+                }
+            ],
+        )
+
+    s.assert_tool_output_matches(
+        "get_release_info",
+        schema={"release_version": str, "open_p0": int},
+    )
+
+
+def test_patch_tool_result_list_content_blocks() -> None:
+    """Anthropic tool_result ``content`` as a list of text blocks is joined and parsed."""
+    tool_block = _make_tool_use_block("ping", {}, "toolu_ping")
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        _make_response(tool_blocks=[tool_block]),
+        _make_response(text="ok"),
+    ]
+    patched = patch(client)
+
+    with reagent_flow.session("anthropic-list") as s:
+        patched.messages.create(model="claude-sonnet-4", messages=[], max_tokens=100)
+        patched.messages.create(
+            model="claude-sonnet-4",
+            max_tokens=100,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_ping",
+                            "content": [{"type": "text", "text": '{"ok": true}'}],
+                        }
+                    ],
+                }
+            ],
+        )
+
+    assert s.trace.turns[0].tool_results[0].result == {"ok": True}
+
+
+def test_patch_tool_result_unknown_call_id_ignored() -> None:
+    """tool_result blocks referencing an unknown call_id are skipped."""
+    tool_block = _make_tool_use_block("lookup", {}, "toolu_real")
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        _make_response(tool_blocks=[tool_block]),
+        _make_response(text="ok"),
+    ]
+    patched = patch(client)
+
+    with reagent_flow.session("anthropic-unknown") as s:
+        patched.messages.create(model="claude-sonnet-4", messages=[], max_tokens=100)
+        patched.messages.create(
+            model="claude-sonnet-4",
+            max_tokens=100,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_ghost",
+                            "content": "x",
+                        }
+                    ],
+                }
+            ],
+        )
+
+    assert s.trace.turns[0].tool_results == []

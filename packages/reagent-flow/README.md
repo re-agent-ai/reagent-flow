@@ -1,22 +1,42 @@
 # reagent-flow
 
-**Record. Assert. Diff.** — Behavioral testing for AI agent tool-calling loops, so a prompt tweak never silently breaks your agent again.
+**Contract testing for multi-agent handoffs.** pytest-native assertions that catch schema drift, broken handoffs, and tool-output regressions *before* they ship.
 
 ## Why reagent-flow?
 
-AI agents that call tools are hard to test. A single prompt change can alter which tools get called, in what order, and with what arguments. Traditional unit tests can't catch these regressions because the behavior lives in the LLM's tool-calling loop, not in your code.
+Multi-agent systems fail at the seams. One agent hands structured data to the next, and the second agent keeps running even when the shape is subtly wrong — a renamed field, a missing key, a string where an `int` was expected. The LLM papers over it, the tests pass, and the bug surfaces in production as an incoherent decision nobody can trace.
 
-**reagent-flow** records every tool call your agent makes, then lets you assert on the sequence — which tools were called, in what order, whether they succeeded, and how long it all took. When an assertion fails, you get an **Agent Stack Trace** showing the full tool-calling history so you can see exactly where behavior diverged.
+**reagent-flow** treats every handoff as a contract and every tool call as a typed boundary. You declare the schema you expect; reagent-flow records what actually flowed and fails the test when they diverge — with an **Agent Stack Trace** pinpointing the exact field that drifted.
 
-**Golden baselines** let you snapshot a known-good trace and diff future runs against it, catching regressions the way snapshot testing catches UI regressions.
+```python
+# Assessor receives a handoff from the gatherer. This is the contract:
+assessor_session.assert_handoff_matches(schema={
+    "release_version": str,
+    "ci": {"pipeline": str, "coverage": float},
+    "issues": {"open_p0": int, "open_p1": int},
+})
+```
+
+If the upstream agent renames `open_p0` → `p0_count`, this assertion fails at PR time, not in prod.
+
+### What you get
+
+- **Handoff contracts** — type-check the data passed between agents, with nested dicts, typed lists, and optional Pydantic support.
+- **Tool output contracts** — validate the shape of every tool's return value, catching upstream API drift before the downstream agent sees it.
+- **Context preservation checks** — verify specific values (IDs, versions, user refs) survive multi-hop handoffs unchanged.
+- **Flow and count assertions** — guarantee the tool-calling sequence you expect (order, repetition, forbidden calls).
+- **Golden baseline diffs** — snapshot-test known-good traces and detect behavioral regressions from prompt tweaks.
+- **Agent Stack Traces** — every failed assertion attaches a readable dump of the full tool-calling history.
+- **Zero-dependency core** with thin adapters for OpenAI, Anthropic, LangChain, LangGraph, and CrewAI.
 
 ## Key Concepts
 
 | Concept | Description |
 |---------|-------------|
-| **Session** | A context manager that records tool calls for one agent run |
-| **Turn** | One step in the agent loop: an LLM call, a tool call, or a tool result |
+| **Session** | A context manager that records tool calls for one agent run; may declare a `parent_trace_id` and `handoff_context` to form a link in a multi-agent chain |
+| **Handoff context** | The structured payload passed from one agent session to the next — the target of contract assertions |
 | **Trace** | The full sequence of turns captured during a session |
+| **Contract** | A declared schema (`{field: type}`) validated against a handoff or tool result |
 | **Golden baseline** | A saved trace used as the expected behavior for future runs |
 | **Agent Stack Trace** | A readable dump of every turn, attached to assertion failures |
 
@@ -40,24 +60,60 @@ uv add reagent-flow-crewai      # CrewAI
 
 ## Quick Start
 
+Contract-test a two-agent handoff: the **gatherer** pulls release data, the **assessor** consumes it. reagent-flow validates the shape of what flows between them.
+
 ```python
 import reagent_flow
 
 
-def test_my_agent(tmp_path):
-    with reagent_flow.session("order_flow", trace_dir=str(tmp_path)) as s:
-        # Run your agent — or log manually:
-        s.log_llm_call(
-            tool_calls=[{"name": "lookup_order", "arguments": {"order_id": "123"}}],
-        )
-        s.log_tool_result("lookup_order", result={"status": "active"})
-        s.log_llm_call(response_text="Order is active.", tool_calls=[])
+def test_release_pipeline(tmp_path):
+    trace_dir = str(tmp_path)
 
-    # Assertions
-    s.assert_called("lookup_order")
-    s.assert_never_called("delete_account")
-    s.assert_max_turns(5)
+    # Phase 1 — gatherer agent records release info
+    with reagent_flow.session("gatherer", trace_dir=trace_dir) as gather:
+        gather.log_llm_call(
+            tool_calls=[{"name": "get_release_info", "arguments": {"version": "v2.3.1"}}],
+        )
+        gather.log_tool_result(
+            "get_release_info",
+            result={
+                "release_version": "v2.3.1",
+                "ci": {"pipeline": "passed", "coverage": 87.3},
+                "issues": {"open_p0": 1, "open_p1": 3},
+            },
+        )
+
+    # Contract on the tool output
+    gather.assert_tool_output_matches("get_release_info", schema={
+        "release_version": str,
+        "ci": {"pipeline": str, "coverage": float},
+        "issues": {"open_p0": int, "open_p1": int},
+    })
+
+    # Phase 2 — assessor receives the gatherer's output as a handoff
+    release_info = gather.trace.turns[0].tool_results[0].result
+    with reagent_flow.session(
+        "assessor",
+        trace_dir=trace_dir,
+        parent_trace_id=gather.trace.trace_id,
+        handoff_context=release_info,
+    ) as assess:
+        assess.log_llm_call(
+            tool_calls=[{"name": "assess_risk", "arguments": {"risk_level": "HIGH"}}],
+        )
+        assess.log_tool_result("assess_risk", result={"risk_level": "HIGH"})
+
+    # Contract on the handoff itself — this is where multi-agent systems break
+    assess.assert_handoff_received(gather)
+    assess.assert_handoff_matches(schema={
+        "release_version": str,
+        "ci": {"pipeline": str, "coverage": float},
+        "issues": {"open_p0": int, "open_p1": int},
+    })
+    assess.assert_context_preserved({"release_version": "v2.3.1"}, fields=["release_version"])
 ```
+
+If an upstream change renames `open_p0` → `p0_count`, `assert_handoff_matches` fails with the exact path (`handoff field 'issues.open_p0': missing from data`) attached to an Agent Stack Trace. See the full runnable demo in the repository's `examples/langgraph_demo/` directory.
 
 ### Async Support
 
@@ -329,7 +385,7 @@ with reagent_flow.session("chat") as s:
 s.assert_called("my_tool")
 ```
 
-The `patch()` function wraps `chat.completions.create` to automatically log tool calls and results into the active session.
+The `patch()` function wraps `chat.completions.create` to log every LLM turn into the active session. Tool results you send back on the next `create()` call (as `{"role": "tool", "tool_call_id": ..., "content": ...}` messages) are automatically attached to the turn that requested them, so `assert_tool_output_matches` and the other tool-output contracts work end-to-end. JSON-encoded tool content is decoded before validation.
 
 ### Anthropic
 
@@ -346,7 +402,7 @@ with reagent_flow.session("chat") as s:
 s.assert_called("my_tool")
 ```
 
-The `patch()` function wraps `messages.create` to automatically log `tool_use` content blocks into the active session.
+The `patch()` function wraps `messages.create` to log `tool_use` content blocks on each turn. Tool results you thread back on the next `messages.create` call (as user messages whose `content` is a list of `{"type": "tool_result", "tool_use_id": ..., "content": ...}` blocks) are automatically attached to the turn that requested them, so `assert_tool_output_matches` works end-to-end. JSON-encoded tool content is decoded before validation.
 
 ### LangChain
 
