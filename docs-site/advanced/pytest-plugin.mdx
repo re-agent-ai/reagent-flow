@@ -1,0 +1,82 @@
+---
+title: "pytest Plugin"
+description: "CLI flags, fixtures, and markers for integrating reagent-flow into your test suite."
+---
+
+## Overview
+
+reagent-flow ships as a pytest plugin, auto-loaded via entry point. It provides CLI flags, fixtures, and a marker — no manual registration needed.
+
+## CLI flags
+
+```bash
+pytest --reagent-record       # Set metadata flag for live recording
+pytest --reagent-update       # Re-record golden baselines
+pytest --reagent-dir=.reagent  # Override trace directory (default: .reagent)
+```
+
+## Fixtures
+
+| Fixture | Type | Description |
+|---------|------|-------------|
+| `reagent_session` | `Session` | A managed session that reads all CLI flags, applies the `@pytest.mark.reagent` marker, and auto-saves on exit |
+| `reagent_dir` | `str` | The `--reagent-dir` value |
+| `reagent_record` | `bool` | Whether `--reagent-record` was passed |
+| `reagent_update` | `bool` | Whether `--reagent-update` was passed |
+
+## Using the fixture
+
+The `reagent_session` fixture is the recommended way to use reagent-flow in tests:
+
+```python
+def test_refund_flow(reagent_session):
+    reagent_session.log_llm_call(
+        tool_calls=[{"name": "lookup_order", "arguments": {"id": "123"}}],
+    )
+    reagent_session.log_tool_result("lookup_order", result={"status": "active"})
+    reagent_session.assert_called("lookup_order")
+```
+
+## Golden baseline marker
+
+Use the `@pytest.mark.reagent` marker to control golden baseline behavior:
+
+```python
+@pytest.mark.reagent(golden=True)
+def test_refund_golden(reagent_session):
+    run_agent(reagent_session)
+```
+
+Or update all goldens at once:
+
+```bash
+pytest --reagent-update
+```
+
+## Manual session management
+
+You can still manage sessions manually for more control:
+
+```python
+import reagent_flow
+
+def test_refund_manual(tmp_path):
+    with reagent_flow.session("refund", trace_dir=str(tmp_path)) as s:
+        run_agent(s)
+    s.assert_matches_baseline()
+```
+
+## Running tests
+
+<Warning>
+Use `coverage run -m pytest` instead of `pytest --cov`. There is a plugin load-order issue with the `--cov` flag.
+</Warning>
+
+```bash
+# Run tests
+uv run pytest packages/ -v
+
+# Run with coverage
+uv run coverage run -m pytest packages/
+uv run coverage report --show-missing
+```

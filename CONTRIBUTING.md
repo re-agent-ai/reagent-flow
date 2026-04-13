@@ -53,7 +53,7 @@ uv run mypy packages/reagent-flow/src/reagent_flow/ --strict
 
 ## Pull Request Process
 
-1. Create a feature branch from `main`
+1. Create a feature branch from `master`
 2. Make your changes with tests
 3. Ensure all checks pass: `uv run ruff check`, `uv run ruff format --check`, `uv run mypy --strict`, `uv run pytest`
 4. Coverage must remain at 90%+

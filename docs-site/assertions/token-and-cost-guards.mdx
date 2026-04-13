@@ -1,0 +1,82 @@
+---
+title: "Token and Cost Guards"
+description: "Guard against runaway token usage or unexpected costs."
+---
+
+## Overview
+
+Token and cost guards catch runaway agent behavior — infinite loops, unexpectedly expensive model calls, or token budget overruns. They use the `token_usage` data recorded in each LLM call.
+
+## assert_total_tokens_under
+
+Assert that total token usage across all turns stays under a limit:
+
+```python
+s.assert_total_tokens_under(50_000)
+```
+
+Sums `prompt_tokens` + `completion_tokens` (OpenAI) or `input_tokens` + `output_tokens` (Anthropic) across all turns.
+
+### Missing token data
+
+By default, turns without token data are included in the count as zero. Pass `allow_missing=False` to fail if any turn lacks token usage:
+
+```python
+s.assert_total_tokens_under(50_000, allow_missing=False)
+```
+
+## assert_cost_under
+
+Assert that estimated cost stays under a USD limit, using per-model pricing:
+
+```python
+s.assert_cost_under(
+    usd=1.00,
+    model_costs={
+        "gpt-4o": {"input": 2.50, "output": 10.00},
+        "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+        "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
+    },
+)
+```
+
+### How pricing works
+
+- Costs are specified as **USD per 1M tokens** for input and output separately
+- Model names are matched by **longest prefix** — `"gpt-4o"` matches `"gpt-4o-2024-08-06"`
+- Turns with unmatched models emit a warning and are skipped (or fail if `allow_unpriced=False`)
+
+```python
+# Fail if any turn uses an unpriced model
+s.assert_cost_under(
+    usd=1.00,
+    model_costs={"gpt-4o": {"input": 2.50, "output": 10.00}},
+    allow_unpriced=False,
+)
+```
+
+## Example
+
+```python
+def test_cost_guard(tmp_path):
+    with reagent_flow.session("expensive-agent", trace_dir=str(tmp_path)) as s:
+        s.log_llm_call(
+            tool_calls=[{"name": "search", "arguments": {}}],
+            model="gpt-4o-2024-08-06",
+            token_usage={"prompt_tokens": 1000, "completion_tokens": 500},
+        )
+        s.log_tool_result("search", result={"found": True})
+
+        s.log_llm_call(
+            response_text="Here are your results.",
+            tool_calls=[],
+            model="gpt-4o-2024-08-06",
+            token_usage={"prompt_tokens": 1500, "completion_tokens": 200},
+        )
+
+    s.assert_total_tokens_under(10_000)
+    s.assert_cost_under(
+        usd=0.05,
+        model_costs={"gpt-4o": {"input": 2.50, "output": 10.00}},
+    )
+```

@@ -1,0 +1,137 @@
+---
+title: "Flow and Count Assertions"
+description: "Assert on tool-calling order, sequences, counts, and arguments."
+---
+
+## Overview
+
+Flow and count assertions verify the *behavior* of an agent — which tools it called, in what order, how many times, and with what arguments.
+
+## Assertions reference
+
+### assert_called
+
+Tool was called at least once:
+
+```python
+s.assert_called("search")
+```
+
+### assert_never_called
+
+Tool was never called:
+
+```python
+s.assert_never_called("delete_account")
+```
+
+### assert_called_before
+
+Tool `a` was called before tool `b` (positional ordering across all turns):
+
+```python
+s.assert_called_before("assess_risk", "make_decision")
+```
+
+### assert_called_times
+
+Tool was called between `min` and `max` times:
+
+```python
+s.assert_called_times("search", min=1, max=3)
+
+# Exactly once
+s.assert_called_times("assess_risk", min=1, max=1)
+```
+
+### assert_called_with
+
+Tool was called with specific argument values (partial match):
+
+```python
+s.assert_called_with("search", query="Q3 revenue")
+```
+
+Matches if **any** call to the tool includes the specified arguments. Extra arguments are allowed. If no call matches, the error message shows the closest mismatch.
+
+### assert_tool_succeeded
+
+Tool was called and every execution succeeded (no error in any result):
+
+```python
+s.assert_tool_succeeded("search")
+```
+
+### assert_max_turns
+
+Trace has at most `n` turns:
+
+```python
+s.assert_max_turns(5)
+```
+
+### assert_total_duration_under
+
+Total trace duration is under a threshold (milliseconds):
+
+```python
+s.assert_total_duration_under(ms=10_000)
+```
+
+Uses wall clock time for active sessions.
+
+## Flow patterns
+
+`assert_flow` matches the ordered sequence of tool calls against a pattern. Patterns support `...` (Ellipsis) for "any number of calls here":
+
+```python
+# Exact consecutive match — first two calls must be search then summarize
+s.assert_flow(["search", "summarize"])
+
+# Allow any calls between search and summarize
+s.assert_flow(["search", ..., "summarize"])
+
+# Unanchored — match anywhere in the trace
+s.assert_flow([..., "search", ..., "summarize", ...])
+```
+
+### How anchoring works
+
+Patterns are **anchored to start and end** by default:
+
+| Pattern | Matches | Doesn't match |
+|---------|---------|---------------|
+| `["a", "b"]` | `a → b` | `a → b → c` (extra at end) |
+| `["a", ..., "b"]` | `a → x → y → b` | `x → a → b` (extra at start) |
+| `[..., "a", "b"]` | `x → a → b` | `a → b → x` (extra at end) |
+| `[..., "a", ..., "b", ...]` | anything containing `a` then `b` | `b → a` (wrong order) |
+
+## Full example
+
+```python
+def test_agent_behavior(tmp_path):
+    with reagent_flow.session("risk-pipeline", trace_dir=str(tmp_path)) as s:
+        s.log_llm_call(
+            tool_calls=[{"name": "get_release_info", "arguments": {"version": "v2.3.1"}}],
+        )
+        s.log_tool_result("get_release_info", result={"version": "v2.3.1"})
+
+        s.log_llm_call(
+            tool_calls=[{"name": "assess_risk", "arguments": {"level": "HIGH"}}],
+        )
+        s.log_tool_result("assess_risk", result={"risk": "HIGH"})
+
+        s.log_llm_call(
+            tool_calls=[{"name": "make_decision", "arguments": {"decision": "BLOCK"}}],
+        )
+        s.log_tool_result("make_decision", result={"decision": "BLOCK"})
+
+    # Behavioral assertions
+    s.assert_called("assess_risk")
+    s.assert_never_called("delete_data")
+    s.assert_called_before("assess_risk", "make_decision")
+    s.assert_called_times("assess_risk", min=1, max=1)
+    s.assert_called_with("make_decision", decision="BLOCK")
+    s.assert_flow(["get_release_info", "assess_risk", "make_decision"])
+    s.assert_max_turns(5)
+```

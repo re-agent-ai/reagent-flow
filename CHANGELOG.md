@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — v1.0 contract testing
+
+### Added
+
+- OpenAI adapter now captures tool results from `{"role": "tool"}` messages on each `create()` call, enabling `assert_tool_output_matches` end-to-end
+- Anthropic adapter now captures tool results from `{"type": "tool_result"}` content blocks on each `create()` call
+- LangChain adapter `on_tool_end` now unwraps `ToolMessage.content` and JSON-parses dict/list strings before storing
+- `_log_prior_tool_results()` + `_parse_tool_content()` helpers in both OpenAI and Anthropic adapters
+- `_unwrap_tool_output()` helper in LangChain adapter
+- Three-sub-agent Release Gatekeeper demo (`examples/langgraph_demo/`) with Gatherer, Assessor, Decider pipeline
+- `orchestrator.py` — runs three sessions in sequence with `parent_trace_id`/`handoff_context` wiring
+- `get_release_info_drifted` tool variant for simulating upstream schema drift
+- `test_demo.py` — mock-based tests exercising the contract story (no live LLM calls)
+- `conftest.py` for demo `--import-mode=importlib` compatibility
+
+### Changed
+
+- Product positioning: reagent-flow = **contract testing for multi-agent handoffs**
+- Root README and `packages/reagent-flow/README.md` lede rewritten around contract testing and handoff schemas
+- AGENTS.md project summary updated to match new positioning
+- Both README adapter sections now describe tool-result capture mechanism
+- ARCHITECTURE.md updated to reflect contract testing positioning and adapter tool-result capture
+- Rejected three-mode (monitor/shadow/configure) proposal — runtime/policy ideas stay on future roadmap
+
 ## [0.4.0] — 2026-04-07
 
 ### Added

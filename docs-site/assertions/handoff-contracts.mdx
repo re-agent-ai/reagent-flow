@@ -1,0 +1,131 @@
+---
+title: "Handoff Contracts"
+description: "Validate the data shape and integrity of handoffs between agents."
+---
+
+## Overview
+
+Handoff contracts validate the structured data passed from one agent session to another via `handoff_context`. They catch renamed fields, missing keys, wrong types, and broken parent-child links.
+
+## Setting up a handoff
+
+Link two sessions by passing `parent_trace_id` and `handoff_context`:
+
+```python
+import reagent_flow
+
+with reagent_flow.session("parent-agent") as parent:
+    parent.log_llm_call(tool_calls=[{"name": "plan", "arguments": {}}])
+    parent.log_tool_result("plan", result={"task": "research", "query": "Q3"})
+
+# Child receives the parent's output
+with reagent_flow.session(
+    "child-agent",
+    parent_trace_id=parent.trace.trace_id,
+    handoff_context={"task": "research", "query": "Q3"},
+) as child:
+    child.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
+    child.log_tool_result("search", result={"found": True})
+```
+
+## assert_handoff_received
+
+Verifies that a child session is linked to its expected parent.
+
+```python
+child.assert_handoff_received(parent)
+```
+
+Fails if the child's `parent_trace_id` doesn't match the parent's `trace_id`, or if `handoff_context` is missing.
+
+## assert_handoff_matches
+
+Type-checks the `handoff_context` against a declared schema.
+
+```python
+child.assert_handoff_matches(schema={
+    "task": str,
+    "query": str,
+})
+```
+
+### What it checks
+
+- Every key in the schema must exist in the handoff data
+- Every value must match the declared type
+- Nested dicts, typed lists, and list-of-dicts are supported (see [Nested Schemas](/advanced/nested-schemas))
+- `bool` and `int` are strictly separated — `True` is not a valid `int`
+
+### Failure message
+
+```
+handoff field 'issues.open_p0': missing from data
+
+AGENT STACK TRACE — assessor
+================================
+Turn 0: assess_risk(risk_level="HIGH")
+  → {"risk_level": "HIGH"}
+```
+
+## assert_handoff_has_fields
+
+Checks that specific field names exist in the handoff context (without type checking):
+
+```python
+child.assert_handoff_has_fields(["task", "query", "priority"])
+```
+
+Use this for quick presence checks when you don't need full type validation.
+
+## assert_no_extra_fields
+
+Verifies that the handoff context contains **only** the allowed fields:
+
+```python
+child.assert_no_extra_fields(allowed=["task", "query"])
+```
+
+Catches PII or debug fields accidentally leaking through handoffs. Fails if the handoff contains any key not in the allowed list.
+
+## assert_context_preserved
+
+Verifies that specific values survived a handoff unchanged:
+
+```python
+source = {"user_id": "abc123", "query": "revenue Q4"}
+child.assert_context_preserved(source, fields=["user_id", "query"])
+```
+
+Compares the `source` dict values against the child's `handoff_context` for the listed fields. Fails if any value was mutated, truncated, or lost.
+
+## Full example
+
+```python
+def test_handoff_contracts(tmp_path):
+    trace_dir = str(tmp_path)
+
+    with reagent_flow.session("orchestrator", trace_dir=trace_dir) as parent:
+        parent.log_llm_call(
+            tool_calls=[{"name": "plan", "arguments": {"user_id": "u-42"}}],
+        )
+        parent.log_tool_result("plan", result={"user_id": "u-42", "step": "search"})
+
+    handoff = {"user_id": "u-42", "step": "search"}
+    with reagent_flow.session(
+        "researcher",
+        trace_dir=trace_dir,
+        parent_trace_id=parent.trace.trace_id,
+        handoff_context=handoff,
+    ) as child:
+        child.log_llm_call(
+            tool_calls=[{"name": "search", "arguments": {"q": "test"}}],
+        )
+        child.log_tool_result("search", result={"count": 5})
+
+    # All handoff contracts
+    child.assert_handoff_received(parent)
+    child.assert_handoff_has_fields(["user_id", "step"])
+    child.assert_handoff_matches(schema={"user_id": str, "step": str})
+    child.assert_no_extra_fields(allowed=["user_id", "step"])
+    child.assert_context_preserved({"user_id": "u-42"}, fields=["user_id"])
+```

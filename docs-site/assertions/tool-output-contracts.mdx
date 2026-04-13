@@ -1,0 +1,125 @@
+---
+title: "Tool Output Contracts"
+description: "Validate the shape of tool return values to catch upstream API drift."
+---
+
+## Overview
+
+Tool output contracts validate the structure of what a tool returns. When a tool's return shape changes — an upstream API renames a field, drops a key, or changes a type — `assert_tool_output_matches` catches it before the downstream agent sees wrong data.
+
+## assert_tool_output_matches
+
+```python
+s.assert_tool_output_matches("get_release_info", schema={
+    "release_version": str,
+    "ci": {"pipeline": str, "coverage": float},
+    "issues": {"open_p0": int, "open_p1": int},
+})
+```
+
+### What it checks
+
+- Finds all tool results for the named tool across all turns
+- Validates every result against the schema
+- Reports the first mismatch with the exact field path
+
+### Failure message
+
+```
+tool 'get_release_info' result field 'ci.coverage': expected float, got str
+
+AGENT STACK TRACE — gatherer
+================================
+Turn 0: get_release_info(version="v2.3.1")
+  → {"release_version": "v2.3.1", "ci": {"pipeline": "passed", "coverage": "87.3"}, ...}
+```
+
+## Schema format
+
+Schemas are dicts mapping field names to expected types:
+
+```python
+# Flat schema
+schema = {"name": str, "count": int, "active": bool}
+
+# Nested schema
+schema = {
+    "user": {"id": str, "name": str},
+    "scores": [float],
+    "results": [{"id": str, "title": str}],
+}
+```
+
+See [Nested Schemas](/advanced/nested-schemas) for the full schema language.
+
+## Adapter support
+
+Tool output contracts work with **all** framework adapters:
+
+| Adapter | How results are captured |
+|---------|------------------------|
+| **OpenAI** | Extracted from `{"role": "tool", "tool_call_id": ...}` messages on the next `create()` call |
+| **Anthropic** | Extracted from `{"type": "tool_result", "tool_use_id": ...}` content blocks on the next `create()` call |
+| **LangChain** | Captured automatically via `on_tool_end` callback |
+| **LangGraph** | Same as LangChain (extends the callback handler) |
+| **CrewAI** | Captured via `instrument()` tool wrapping |
+| **Manual** | Call `s.log_tool_result(name, result=...)` directly |
+
+## Example with manual logging
+
+```python
+def test_tool_output_contract(tmp_path):
+    with reagent_flow.session("agent", trace_dir=str(tmp_path)) as s:
+        s.log_llm_call(
+            tool_calls=[{"name": "search", "arguments": {"q": "test"}}],
+        )
+        s.log_tool_result("search", result={
+            "results": [
+                {"id": "doc-1", "score": 0.95, "title": "Getting Started"},
+                {"id": "doc-2", "score": 0.87, "title": "API Reference"},
+            ],
+            "total": 2,
+        })
+
+    s.assert_tool_output_matches("search", schema={
+        "results": [{"id": str, "score": float, "title": str}],
+        "total": int,
+    })
+```
+
+## Example with OpenAI adapter
+
+```python
+from openai import OpenAI
+from reagent_flow_openai import patch
+import reagent_flow
+
+client = patch(OpenAI())
+
+with reagent_flow.session("chat") as s:
+    # Turn 1: model requests a tool call
+    resp = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": "Look up order 123"}],
+        tools=[...],
+    )
+
+    # User code runs the tool and sends the result back
+    tool_result = run_tool(resp.choices[0].message.tool_calls[0])
+
+    # Turn 2: model sees the tool result and responds
+    client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "user", "content": "Look up order 123"},
+            resp.choices[0].message,
+            {"role": "tool", "tool_call_id": "call_abc", "content": tool_result},
+        ],
+    )
+
+# The adapter captured the tool result — validate its shape
+s.assert_tool_output_matches("lookup_order", schema={
+    "status": str,
+    "amount": float,
+})
+```

@@ -1,0 +1,109 @@
+---
+title: "Nested Schemas"
+description: "Validate nested dicts, typed lists, union types, and Pydantic models."
+---
+
+## Overview
+
+`assert_handoff_matches` and `assert_tool_output_matches` support deeply nested schema validation. Error messages include dot/bracket path notation so you can pinpoint exactly which field failed.
+
+## Schema types
+
+### Flat dict
+
+```python
+schema = {"name": str, "count": int, "active": bool}
+```
+
+### Nested dict
+
+```python
+schema = {
+    "user": {"id": str, "name": str},
+    "query": str,
+}
+```
+
+Error: `"handoff field 'user.name': expected str, got int"`
+
+### Typed list
+
+Every element must match the declared type:
+
+```python
+schema = {"tags": [str]}
+```
+
+Error: `"handoff field 'tags[2]': expected str, got int"`
+
+### Union typed list
+
+Elements can be any of the listed types:
+
+```python
+schema = {"values": [str, int]}
+```
+
+Each element is checked against all listed types — passes if it matches any.
+
+### List of dicts
+
+Each element must match the dict schema:
+
+```python
+schema = {
+    "results": [{"id": str, "score": float, "title": str}],
+}
+```
+
+Error: `"handoff field 'results[0].score': expected float, got str"`
+
+### Deeply nested
+
+Schemas compose arbitrarily:
+
+```python
+schema = {
+    "pipeline": {
+        "stages": [{
+            "name": str,
+            "status": str,
+            "metrics": {"passed": int, "failed": int},
+        }],
+        "total_duration_ms": float,
+    },
+    "release_version": str,
+}
+```
+
+## Strict bool/int separation
+
+Python's `bool` subclasses `int`, but reagent-flow distinguishes them:
+
+| Schema type | `True` | `1` | `False` | `0` |
+|-------------|--------|-----|---------|-----|
+| `bool` | pass | fail | pass | fail |
+| `int` | fail | pass | fail | pass |
+
+This prevents silent type confusion at agent boundaries.
+
+## Optional Pydantic support
+
+When Pydantic is installed, pass a `BaseModel` subclass instead of a dict schema:
+
+```python
+from pydantic import BaseModel
+
+class ReleaseInfo(BaseModel):
+    release_version: str
+    ci: dict
+    issues: dict
+
+session.assert_handoff_matches(schema=ReleaseInfo)
+```
+
+Pydantic validation uses `model_validate()` under the hood. On failure, the Pydantic error details are included in the assertion message.
+
+<Note>
+Pydantic is never imported at module level — detection is purely runtime. Users without Pydantic get identical behavior using dict schemas. No new dependency is introduced.
+</Note>
