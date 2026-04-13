@@ -1,0 +1,97 @@
+---
+title: "OpenAI"
+sidebarTitle: "OpenAI"
+description: "Auto-capture tool calls and results from the OpenAI Python SDK."
+---
+
+## Installation
+
+```bash
+uv add reagent-flow-openai
+```
+
+## Setup
+
+Wrap your OpenAI client with `patch()`:
+
+```python
+from openai import OpenAI
+from reagent_flow_openai import patch
+import reagent_flow
+
+client = patch(OpenAI())
+```
+
+`patch()` wraps `client.chat.completions.create` to automatically log every LLM turn into the active reagent-flow session.
+
+## Basic usage
+
+```python
+with reagent_flow.session("chat") as s:
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": "Look up order 123"}],
+        tools=[...],
+    )
+
+s.assert_called("lookup_order")
+```
+
+## Tool result capture
+
+When you send tool results back in the next `create()` call, the adapter automatically attaches them to the turn that requested them:
+
+```python
+with reagent_flow.session("chat") as s:
+    # Turn 1: model requests tool execution
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": "Look up order 123"}],
+        tools=[...],
+    )
+
+    # User code runs the tool
+    tool_result = execute_tool(response.choices[0].message.tool_calls[0])
+
+    # Turn 2: send the result back — adapter captures it automatically
+    client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "user", "content": "Look up order 123"},
+            response.choices[0].message,
+            {
+                "role": "tool",
+                "tool_call_id": response.choices[0].message.tool_calls[0].id,
+                "content": json.dumps(tool_result),
+            },
+        ],
+    )
+
+# Tool output contract works end-to-end
+s.assert_tool_output_matches("lookup_order", schema={
+    "status": str,
+    "amount": float,
+})
+```
+
+<Info>
+JSON-encoded tool content is automatically decoded before validation, so `assert_tool_output_matches` can validate dict/list shapes even when the content was serialized as a string.
+</Info>
+
+## What gets captured
+
+| Data | Source | Logged as |
+|------|--------|-----------|
+| Tool calls | `response.choices[0].message.tool_calls` | `log_llm_call(tool_calls=...)` |
+| Response text | `response.choices[0].message.content` | `log_llm_call(response_text=...)` |
+| Model name | `response.model` | `log_llm_call(model=...)` |
+| Token usage | `response.usage` | `log_llm_call(token_usage=...)` |
+| Tool results | `{"role": "tool", ...}` in next call's messages | `log_tool_result(...)` |
+
+## Streaming
+
+Streaming (`stream=True`) is detected and skipped with a warning. Use `stream=False` for traced calls.
+
+## No session active
+
+If no reagent-flow session is active when `create()` is called, the adapter is a no-op — the original call passes through unchanged.

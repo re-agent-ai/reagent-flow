@@ -1,0 +1,47 @@
+---
+title: "Async Support"
+description: "Use reagent-flow sessions with async/await."
+---
+
+## Overview
+
+Sessions work as both sync and async context managers. The API is identical — use `async with` instead of `with`.
+
+## Usage
+
+```python
+import reagent_flow
+
+async def test_async_agent():
+    async with reagent_flow.session("async_flow", trace_dir=".reagent") as s:
+        s.log_llm_call(
+            tool_calls=[{"name": "search", "arguments": {"q": "test"}}],
+        )
+        s.log_tool_result("search", result={"found": True})
+
+    s.assert_called("search")
+```
+
+## Thread safety
+
+Sessions use Python's `contextvars`, which are natively async-safe. Each async task sees its own active session — no locking required.
+
+```python
+import asyncio
+import reagent_flow
+
+async def run_agent(name: str):
+    async with reagent_flow.session(name) as s:
+        s.log_llm_call(tool_calls=[{"name": "work", "arguments": {}}])
+        s.log_tool_result("work", result={"done": True})
+    s.assert_called("work")
+
+async def test_parallel_agents():
+    await asyncio.gather(
+        run_agent("agent-1"),
+        run_agent("agent-2"),
+        run_agent("agent-3"),
+    )
+```
+
+Each session is isolated — `agent-1`'s trace never leaks into `agent-2`.

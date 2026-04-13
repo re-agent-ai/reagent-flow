@@ -1,0 +1,92 @@
+---
+title: "Sessions and Traces"
+description: "How reagent-flow records agent behavior into structured, assertable traces."
+---
+
+## Sessions
+
+A **session** is a context manager that records everything an agent does during one run. Every tool call, every LLM response, every result — captured as a structured **trace**.
+
+```python
+import reagent_flow
+
+with reagent_flow.session("my-agent", trace_dir=".reagent") as s:
+    # agent work happens here — tool calls are recorded
+    s.log_llm_call(
+        tool_calls=[{"name": "search", "arguments": {"query": "Q3 revenue"}}],
+    )
+    s.log_tool_result("search", result={"found": True, "count": 42})
+    s.log_llm_call(response_text="Found 42 results.", tool_calls=[])
+```
+
+### Session parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `str` | Identifies this session (used for storage and golden baselines) |
+| `trace_dir` | `str` | Directory for saving trace files (default: `.reagent`) |
+| `golden` | `bool` | If `True`, saves the trace as a golden baseline |
+| `parent_trace_id` | `str` | Links this session to a parent session (for multi-agent chains) |
+| `handoff_context` | `dict` | Structured data received from the parent agent |
+| `metadata` | `dict` | Arbitrary metadata attached to the trace |
+
+### Lifecycle
+
+1. **Enter** — `with reagent_flow.session(...) as s:` sets the session as the active context
+2. **Record** — tool calls and results are logged via `log_llm_call` and `log_tool_result`
+3. **Exit** — the session finalizes the trace and saves it to disk
+4. **Assert** — after exiting, call assertion methods on the closed session
+
+<Warning>
+Assertions must be called **after** the `with` block exits — the trace is finalized at exit time. Calling assertions inside the block works but may miss the final turn.
+</Warning>
+
+## Traces
+
+A **trace** is the structured record of a session. It contains a list of **turns**, each with an LLM call and its resulting tool executions.
+
+```
+Trace
+├── trace_id: "abc-123"
+├── name: "my-agent"
+├── parent_trace_id: null
+├── handoff_context: null
+├── turns:
+│   ├── Turn 0
+│   │   ├── LLM Call: tool_calls=[search(query="Q3 revenue")]
+│   │   └── Tool Results: [search → {found: true, count: 42}]
+│   └── Turn 1
+│       ├── LLM Call: response_text="Found 42 results."
+│       └── Tool Results: []
+```
+
+### Storage
+
+Traces are saved as JSON files:
+- **Regular traces:** `{trace_dir}/{name}.trace.json`
+- **Golden baselines:** `{trace_dir}/golden/{name}.trace.json`
+
+### Manual logging
+
+When using framework adapters (OpenAI, LangChain, etc.), logging happens automatically. For manual instrumentation or testing:
+
+```python
+# Log an LLM call that requests tool execution
+call_ids = s.log_llm_call(
+    tool_calls=[
+        {"name": "search", "arguments": {"query": "test"}, "call_id": "call_1"},
+        {"name": "lookup", "arguments": {"id": "abc"}, "call_id": "call_2"},
+    ],
+)
+
+# Log tool results (matched by name or call_id)
+s.log_tool_result("search", result={"found": True})
+s.log_tool_result("lookup", call_id="call_2", result={"status": "active"})
+
+# Log a text-only response (no tool calls)
+s.log_llm_call(response_text="Here are your results.", tool_calls=[])
+```
+
+### Thread safety
+
+Sessions use Python's `contextvars` for thread-safe tracking. Each thread or async task sees its own active session — no global mutable state.

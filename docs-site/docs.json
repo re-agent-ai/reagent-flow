@@ -1,0 +1,87 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "reagent-flow",
+  "theme": "quill",
+  "colors": {
+    "primary": "#6366F1",
+    "light": "#818CF8",
+    "dark": "#4F46E5"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/sessions-and-traces",
+              "concepts/contract-testing"
+            ]
+          },
+          {
+            "group": "Assertions",
+            "pages": [
+              "assertions/handoff-contracts",
+              "assertions/tool-output-contracts",
+              "assertions/flow-and-count",
+              "assertions/golden-baselines",
+              "assertions/token-and-cost-guards"
+            ]
+          },
+          {
+            "group": "Framework Adapters",
+            "pages": [
+              "adapters/openai",
+              "adapters/anthropic",
+              "adapters/langchain",
+              "adapters/langgraph",
+              "adapters/crewai"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/nested-schemas",
+              "advanced/pytest-plugin",
+              "advanced/async-support",
+              "advanced/agent-stack-traces"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/release-gatekeeper"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/re-agent-ai/reagent-ai"
+    }
+  },
+  "feedback": {
+    "thumbsRating": true
+  },
+  "search": {
+    "prompt": "Search reagent-flow docs..."
+  },
+  "seo": {
+    "indexHiddenPages": false
+  }
+}

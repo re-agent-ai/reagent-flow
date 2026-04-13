@@ -1,0 +1,131 @@
+---
+title: "Quickstart"
+description: "Install reagent-flow and write your first contract test in under 5 minutes."
+---
+
+## Installation
+
+<CodeGroup>
+
+```bash pip
+pip install reagent-flow
+```
+
+```bash uv
+uv add reagent-flow
+```
+
+</CodeGroup>
+
+### Framework adapters
+
+Install only the adapters you need:
+
+```bash
+uv add reagent-flow-openai      # OpenAI
+uv add reagent-flow-anthropic   # Anthropic
+uv add reagent-flow-langchain   # LangChain
+uv add reagent-flow-langgraph   # LangGraph
+uv add reagent-flow-crewai      # CrewAI
+```
+
+## Your first contract test
+
+Contract-test a two-agent handoff: the **gatherer** pulls release data, the **assessor** consumes it. reagent-flow validates the shape of what flows between them.
+
+```python
+import reagent_flow
+
+
+def test_release_pipeline(tmp_path):
+    trace_dir = str(tmp_path)
+
+    # Phase 1 — gatherer agent records release info
+    with reagent_flow.session("gatherer", trace_dir=trace_dir) as gather:
+        gather.log_llm_call(
+            tool_calls=[{"name": "get_release_info", "arguments": {"version": "v2.3.1"}}],
+        )
+        gather.log_tool_result(
+            "get_release_info",
+            result={
+                "release_version": "v2.3.1",
+                "ci": {"pipeline": "passed", "coverage": 87.3},
+                "issues": {"open_p0": 1, "open_p1": 3},
+            },
+        )
+
+    # Contract on the tool output
+    gather.assert_tool_output_matches("get_release_info", schema={
+        "release_version": str,
+        "ci": {"pipeline": str, "coverage": float},
+        "issues": {"open_p0": int, "open_p1": int},
+    })
+
+    # Phase 2 — assessor receives the gatherer's output as a handoff
+    release_info = gather.trace.turns[0].tool_results[0].result
+    with reagent_flow.session(
+        "assessor",
+        trace_dir=trace_dir,
+        parent_trace_id=gather.trace.trace_id,
+        handoff_context=release_info,
+    ) as assess:
+        assess.log_llm_call(
+            tool_calls=[{"name": "assess_risk", "arguments": {"risk_level": "HIGH"}}],
+        )
+        assess.log_tool_result("assess_risk", result={"risk_level": "HIGH"})
+
+    # Contract on the handoff — this is where multi-agent systems break
+    assess.assert_handoff_received(gather)
+    assess.assert_handoff_matches(schema={
+        "release_version": str,
+        "ci": {"pipeline": str, "coverage": float},
+        "issues": {"open_p0": int, "open_p1": int},
+    })
+    assess.assert_context_preserved(
+        {"release_version": "v2.3.1"}, fields=["release_version"]
+    )
+```
+
+<Info>
+If an upstream change renames `open_p0` to `p0_count`, `assert_handoff_matches` fails with the exact path: `handoff field 'issues.open_p0': missing from data` — attached to an Agent Stack Trace.
+</Info>
+
+## Run the test
+
+```bash
+pytest test_release_pipeline.py -v
+```
+
+## What just happened?
+
+<Steps>
+  <Step title="Recorded the gatherer's work">
+    The `session` context manager captured every tool call and result into a structured trace.
+  </Step>
+  <Step title="Validated the tool output">
+    `assert_tool_output_matches` checked that `get_release_info` returned data matching the declared schema.
+  </Step>
+  <Step title="Linked the sessions">
+    The assessor session declared `parent_trace_id` and `handoff_context`, creating a typed boundary between the two agents.
+  </Step>
+  <Step title="Enforced the handoff contract">
+    `assert_handoff_matches` verified the data shape, `assert_handoff_received` confirmed the parent link, and `assert_context_preserved` checked that `release_version` survived the hop.
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Core Concepts" icon="book" href="/concepts/sessions-and-traces">
+    Understand sessions, traces, and the recording model.
+  </Card>
+  <Card title="Contract Testing" icon="handshake" href="/concepts/contract-testing">
+    Learn how reagent-flow treats handoffs as contracts.
+  </Card>
+  <Card title="Framework Adapters" icon="plug" href="/adapters/openai">
+    Auto-capture traces from OpenAI, Anthropic, LangChain, and more.
+  </Card>
+  <Card title="Release Gatekeeper Example" icon="shield-check" href="/examples/release-gatekeeper">
+    See a full three-agent pipeline with contract testing end-to-end.
+  </Card>
+</CardGroup>

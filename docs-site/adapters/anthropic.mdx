@@ -1,0 +1,106 @@
+---
+title: "Anthropic"
+sidebarTitle: "Anthropic"
+description: "Auto-capture tool calls and results from the Anthropic Python SDK."
+---
+
+## Installation
+
+```bash
+uv add reagent-flow-anthropic
+```
+
+## Setup
+
+Wrap your Anthropic client with `patch()`:
+
+```python
+from anthropic import Anthropic
+from reagent_flow_anthropic import patch
+import reagent_flow
+
+client = patch(Anthropic())
+```
+
+`patch()` wraps `client.messages.create` to automatically log `tool_use` content blocks into the active reagent-flow session.
+
+## Basic usage
+
+```python
+with reagent_flow.session("chat") as s:
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        messages=[{"role": "user", "content": "Look up order 123"}],
+        tools=[...],
+        max_tokens=1024,
+    )
+
+s.assert_called("lookup_order")
+```
+
+## Tool result capture
+
+When you thread tool results back as user messages with `tool_result` content blocks, the adapter captures them automatically:
+
+```python
+with reagent_flow.session("chat") as s:
+    # Turn 1: model requests tool execution via tool_use block
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        messages=[{"role": "user", "content": "Look up order 123"}],
+        tools=[...],
+        max_tokens=1024,
+    )
+
+    # User code runs the tool
+    tool_use_block = response.content[0]  # type: tool_use
+    tool_result = execute_tool(tool_use_block)
+
+    # Turn 2: send the result back — adapter captures it automatically
+    client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        messages=[
+            {"role": "user", "content": "Look up order 123"},
+            {"role": "assistant", "content": response.content},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_block.id,
+                        "content": json.dumps(tool_result),
+                    }
+                ],
+            },
+        ],
+    )
+
+# Tool output contract works end-to-end
+s.assert_tool_output_matches("lookup_order", schema={
+    "status": str,
+    "amount": float,
+})
+```
+
+<Info>
+The adapter handles both string content and list-of-text-blocks content in `tool_result` blocks. JSON-encoded content is automatically decoded for schema validation.
+</Info>
+
+## What gets captured
+
+| Data | Source | Logged as |
+|------|--------|-----------|
+| Tool calls | `tool_use` content blocks | `log_llm_call(tool_calls=...)` |
+| Response text | `text` content blocks | `log_llm_call(response_text=...)` |
+| Model name | `response.model` | `log_llm_call(model=...)` |
+| Token usage | `response.usage` (`input_tokens`, `output_tokens`) | `log_llm_call(token_usage=...)` |
+| Tool results | `tool_result` blocks in next call's user messages | `log_tool_result(...)` |
+
+## Streaming
+
+Streaming (`stream=True`) is detected and skipped with a warning. Use `stream=False` for traced calls.
+
+## No session active
+
+If no reagent-flow session is active when `create()` is called, the adapter is a no-op.

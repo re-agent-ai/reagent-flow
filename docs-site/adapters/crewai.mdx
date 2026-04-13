@@ -1,0 +1,59 @@
+---
+title: "CrewAI"
+sidebarTitle: "CrewAI"
+description: "Auto-capture tool calls and results from CrewAI crews."
+---
+
+## Installation
+
+```bash
+uv add reagent-flow-crewai
+```
+
+## Setup
+
+Wrap your crew with `instrument()`:
+
+```python
+from reagent_flow_crewai import instrument
+import reagent_flow
+
+crew = instrument(my_crew)
+
+with reagent_flow.session("crew") as s:
+    crew.kickoff()
+
+s.assert_called("my_tool")
+```
+
+## How it works
+
+`instrument()` wraps all agent tools to capture calls and results into the active reagent-flow session. The original tool behavior is preserved — if logging fails, a warning is emitted but the tool call still succeeds.
+
+## Example
+
+```python
+from crewai import Agent, Task, Crew
+from crewai_tools import SomeTool
+from reagent_flow_crewai import instrument
+import reagent_flow
+
+researcher = Agent(
+    role="Researcher",
+    goal="Find relevant information",
+    tools=[SomeTool()],
+)
+
+task = Task(
+    description="Research Q3 earnings",
+    agent=researcher,
+)
+
+crew = instrument(Crew(agents=[researcher], tasks=[task]))
+
+with reagent_flow.session("research-crew") as s:
+    crew.kickoff()
+
+s.assert_called("some_tool")
+s.assert_tool_succeeded("some_tool")
+```

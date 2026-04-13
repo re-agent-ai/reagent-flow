@@ -1,0 +1,75 @@
+---
+title: "Introduction"
+description: "Contract testing for multi-agent handoffs. pytest-native assertions that catch schema drift, broken handoffs, and tool-output regressions before they ship."
+---
+
+# reagent-flow
+
+**Contract testing for multi-agent handoffs.** pytest-native assertions that catch schema drift, broken handoffs, and tool-output regressions *before* they ship.
+
+## The problem
+
+Multi-agent systems fail at the seams. One agent hands structured data to the next, and the second agent keeps running even when the shape is subtly wrong — a renamed field, a missing key, a string where an `int` was expected. The LLM papers over it, the tests pass, and the bug surfaces in production as an incoherent decision nobody can trace.
+
+## The solution
+
+**reagent-flow** treats every handoff as a contract and every tool call as a typed boundary. You declare the schema you expect; reagent-flow records what actually flowed and fails the test when they diverge — with an **Agent Stack Trace** pinpointing the exact field that drifted.
+
+```python
+# Assessor receives a handoff from the gatherer. This is the contract:
+assessor_session.assert_handoff_matches(schema={
+    "release_version": str,
+    "ci": {"pipeline": str, "coverage": float},
+    "issues": {"open_p0": int, "open_p1": int},
+})
+```
+
+If the upstream agent renames `open_p0` to `p0_count`, this assertion fails at PR time, not in prod.
+
+## What you get
+
+<CardGroup cols={2}>
+  <Card title="Handoff contracts" icon="handshake">
+    Type-check the data passed between agents, with nested dicts, typed lists, and optional Pydantic support.
+  </Card>
+  <Card title="Tool output contracts" icon="file-check">
+    Validate the shape of every tool's return value, catching upstream API drift before the downstream agent sees it.
+  </Card>
+  <Card title="Context preservation" icon="link">
+    Verify specific values (IDs, versions, user refs) survive multi-hop handoffs unchanged.
+  </Card>
+  <Card title="Flow assertions" icon="route">
+    Guarantee the tool-calling sequence you expect — order, repetition, forbidden calls.
+  </Card>
+  <Card title="Golden baseline diffs" icon="code-compare">
+    Snapshot-test known-good traces and detect behavioral regressions from prompt tweaks.
+  </Card>
+  <Card title="Agent Stack Traces" icon="layer-group">
+    Every failed assertion attaches a readable dump of the full tool-calling history.
+  </Card>
+</CardGroup>
+
+## Key concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Session** | A context manager that records tool calls for one agent run; may declare a `parent_trace_id` and `handoff_context` to form a link in a multi-agent chain |
+| **Handoff context** | The structured payload passed from one agent session to the next — the target of contract assertions |
+| **Trace** | The full sequence of turns captured during a session |
+| **Contract** | A declared schema (`{field: type}`) validated against a handoff or tool result |
+| **Golden baseline** | A saved trace used as the expected behavior for future runs |
+| **Agent Stack Trace** | A readable dump of every turn, attached to assertion failures |
+
+## Framework support
+
+reagent-flow has a **zero-dependency core** with thin adapters for the major agent frameworks:
+
+- OpenAI
+- Anthropic
+- LangChain
+- LangGraph
+- CrewAI
+
+<Card title="Get started" icon="rocket" href="/quickstart">
+  Install reagent-flow and write your first contract test in under 5 minutes.
+</Card>

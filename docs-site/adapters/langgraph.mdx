@@ -1,0 +1,90 @@
+---
+title: "LangGraph"
+sidebarTitle: "LangGraph"
+description: "Auto-capture tool calls and results from LangGraph agents with graph node tracking."
+---
+
+## Installation
+
+```bash
+uv add reagent-flow-langgraph
+```
+
+## Setup
+
+Use `ReagentGraphTracer` as a callback for your graph:
+
+```python
+from reagent_flow_langgraph import ReagentGraphTracer
+import reagent_flow
+
+tracer = ReagentGraphTracer()
+
+with reagent_flow.session("graph") as s:
+    graph.invoke({"input": "..."}, config={"callbacks": [tracer]})
+
+s.assert_called("my_tool")
+```
+
+## How it works
+
+`ReagentGraphTracer` extends the LangChain callback handler with graph-specific node tracking. It captures the same events as the LangChain handler, plus awareness of which graph node is currently executing.
+
+## Example with a ReAct agent
+
+```python
+from langgraph.prebuilt import create_react_agent
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.tools import tool
+from reagent_flow_langgraph import ReagentGraphTracer
+import reagent_flow
+
+@tool
+def get_release_info(version: str) -> str:
+    """Look up release information."""
+    return json.dumps({"release_version": version, "status": "passed"})
+
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
+agent = create_react_agent(llm, [get_release_info])
+tracer = ReagentGraphTracer()
+
+with reagent_flow.session("gatherer") as s:
+    agent.invoke(
+        {"messages": [("user", "Get info for v2.3.1")]},
+        config={"callbacks": [tracer]},
+    )
+
+s.assert_called("get_release_info")
+s.assert_tool_output_matches("get_release_info", schema={
+    "release_version": str,
+    "status": str,
+})
+```
+
+## Multi-agent pipeline
+
+LangGraph excels at multi-agent architectures. Use separate reagent-flow sessions for each sub-agent, linked via `parent_trace_id` and `handoff_context`:
+
+```python
+# Agent A
+with reagent_flow.session("gatherer", trace_dir=trace_dir) as a:
+    agent_a.invoke(task_a, config={"callbacks": [ReagentGraphTracer()]})
+
+# Extract structured output from agent A
+release_info = a.trace.turns[-1].tool_results[0].result
+
+# Agent B receives the handoff
+with reagent_flow.session(
+    "assessor",
+    trace_dir=trace_dir,
+    parent_trace_id=a.trace.trace_id,
+    handoff_context=release_info,
+) as b:
+    agent_b.invoke(task_b, config={"callbacks": [ReagentGraphTracer()]})
+
+# Contract at the boundary
+b.assert_handoff_received(a)
+b.assert_handoff_matches(schema={"release_version": str, "status": str})
+```
+
+See [Release Gatekeeper Example](/examples/release-gatekeeper) for a complete three-agent pipeline.

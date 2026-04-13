@@ -1,0 +1,71 @@
+---
+title: "LangChain"
+sidebarTitle: "LangChain"
+description: "Auto-capture tool calls and results using the LangChain callback handler."
+---
+
+## Installation
+
+```bash
+uv add reagent-flow-langchain
+```
+
+## Setup
+
+Create a `ReagentCallbackHandler` and pass it to your chain:
+
+```python
+from reagent_flow_langchain import ReagentCallbackHandler
+import reagent_flow
+
+handler = ReagentCallbackHandler()
+
+with reagent_flow.session("chain") as s:
+    chain.invoke({"input": "..."}, config={"callbacks": [handler]})
+
+s.assert_called("my_tool")
+```
+
+## How it works
+
+The callback handler hooks into LangChain's event system:
+
+| LangChain event | What gets logged |
+|-----------------|-----------------|
+| `on_llm_end` | Tool calls from the LLM response (`log_llm_call`) |
+| `on_tool_end` | Tool execution results (`log_tool_result`) |
+
+Tool results are automatically unwrapped from `ToolMessage.content` and JSON-parsed when possible, so `assert_tool_output_matches` can validate dict/list shapes.
+
+## Full example
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+from reagent_flow_langchain import ReagentCallbackHandler
+import reagent_flow
+
+@tool
+def search(query: str) -> dict:
+    """Search for information."""
+    return {"results": [{"title": "Result 1"}], "count": 1}
+
+llm = ChatOpenAI(model="gpt-4o").bind_tools([search])
+handler = ReagentCallbackHandler()
+
+with reagent_flow.session("search-agent") as s:
+    result = llm.invoke(
+        "Find information about Q3 earnings",
+        config={"callbacks": [handler]},
+    )
+
+s.assert_called("search")
+s.assert_tool_output_matches("search", schema={
+    "results": [{"title": str}],
+    "count": int,
+})
+```
+
+## Parallel tool calls
+
+The handler correctly tracks parallel tool calls using `call_id` from LangChain's response. When the LLM requests multiple tools in a single turn, each result is matched to its corresponding call.

@@ -2,31 +2,26 @@
 
 ## What is reagent-flow?
 
-reagent-flow is a behavioral testing library for AI agent tool-calling loops. It captures every tool call an agent makes during a run, then lets you assert on the sequence and diff against golden baselines.
-
-Think of it as **snapshot testing, but for AI agent behavior** -- the way Jest snapshots catch UI regressions, reagent-flow catches agent behavior regressions.
+reagent-flow is a **contract testing library for multi-agent handoffs**. pytest-native assertions catch schema drift, broken handoffs, and tool-output regressions at every agent boundary. The core is zero-dependency; thin framework adapters (OpenAI, Anthropic, LangChain, LangGraph, CrewAI) plug in without bringing in extra deps.
 
 ## The Problem
 
-AI agents work by calling tools in loops. A customer support bot might call `lookup_order` -> `check_refund_policy` -> `process_refund`. But a single prompt tweak can silently change which tools get called, in what order, with what arguments. Traditional unit tests can't catch this because they test individual functions, not the behavioral sequence of an entire agent loop.
+Multi-agent systems fail at the seams. Agent A hands structured data to Agent B, and Agent B keeps running even when the shape is subtly wrong -- a renamed field, a missing key, a string where an `int` was expected. The LLM papers over it, tests pass, and the bug surfaces in production as an incoherent decision nobody can trace.
 
-## The Solution: Record. Assert. Diff.
+## The Solution: Contract Testing for Handoffs
 
 ```python
-# Record every tool call
-with reagent_flow.session("refund_flow") as s:
-    agent.run("Process refund for order 123")
-
-# Assert on the sequence
-s.assert_called("lookup_order")
-s.assert_called_before("lookup_order", "process_refund")
-s.assert_tool_succeeded("process_refund")
-
-# Diff against a known-good baseline
-s.assert_matches_baseline()
+# Declare the contract at every agent boundary
+assessor.assert_handoff_matches(schema={
+    "release_version": str,
+    "ci": {"pipeline": str, "coverage": float},
+    "issues": {"open_p0": int, "open_p1": int},
+})
 ```
 
-When assertions fail, you get an **Agent Stack Trace** -- a readable dump of every turn showing what went wrong and why.
+If the upstream agent renames `open_p0` to `p0_count`, this assertion fails at PR time with the exact field path: `handoff field 'issues.open_p0': missing from data`.
+
+When assertions fail, you get an **Agent Stack Trace** -- a readable dump of every turn showing what went wrong and where.
 
 ## Project Structure
 
@@ -373,15 +368,17 @@ All adapters follow the same contract: intercept framework-specific API calls, e
                                +-------------------+
 ```
 
-| Adapter | Strategy | What it wraps |
-|---------|----------|---------------|
-| OpenAI | `patch(client)` | `client.chat.completions.create` |
-| Anthropic | `patch(client)` | `client.messages.create` |
-| LangChain | Callback handler | `on_llm_end` / `on_tool_end` |
-| LangGraph | Extends LangChain | Adds graph node tracking |
-| CrewAI | `instrument(crew)` | Monkey-patches all agent tool `_run` methods |
+| Adapter | Strategy | What it wraps | Tool result capture |
+|---------|----------|---------------|---------------------|
+| OpenAI | `patch(client)` | `client.chat.completions.create` | Scans `{"role": "tool"}` messages on next `create()` call |
+| Anthropic | `patch(client)` | `client.messages.create` | Scans `{"type": "tool_result"}` content blocks on next `create()` call |
+| LangChain | Callback handler | `on_llm_end` / `on_tool_end` | Automatic via `on_tool_end` callback (unwraps `ToolMessage.content`) |
+| LangGraph | Extends LangChain | Adds graph node tracking | Same as LangChain |
+| CrewAI | `instrument(crew)` | Monkey-patches all agent tool `_run` methods | Automatic via tool wrapping |
 
 Adapters are separate packages with a single dependency on their framework. They never import each other.
+
+**Tool result capture**: All five adapters capture tool execution results for `assert_tool_output_matches`. For OpenAI and Anthropic (where tool execution happens in user code between `create()` calls), the adapter scans the outgoing `messages` kwarg on each call for tool results from prior turns, matches them against still-pending `call_id`s in the recorder, and logs them via `session.log_tool_result()` before recording the new LLM turn. JSON-encoded string content is decoded so schema assertions can validate dict/list shapes.
 
 **Error policy**: Adapters never break the original API call. If capture fails, the original response is returned normally and a `ReagentAdapterWarning` is emitted.
 
@@ -447,7 +444,7 @@ UserWarning
 | Separate adapter packages | Users install only what they need; no framework dep in core |
 | Dataclasses over Pydantic | Lighter, no validation overhead for internal data. Pydantic supported as optional schema input in v0.4. |
 | `_sync_trace()` on every assertion | Enables assertions inside active sessions |
-| Positional diff comparison | Tool call order matters for behavioral testing; call_ids are random UUIDs |
+| Positional diff comparison | Tool call order matters for contract testing; call_ids are random UUIDs |
 | `coverage run` over `--cov` | Avoids plugin load-order issue with pytest entry points |
 | Warnings over silent failures | Users can fix what they can see |
 | `_sanitize_name()` on all trace names | Prevents path traversal attacks via malicious trace names |

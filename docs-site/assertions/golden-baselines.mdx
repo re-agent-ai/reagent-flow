@@ -1,0 +1,91 @@
+---
+title: "Golden Baselines"
+description: "Snapshot-test known-good agent behavior and detect regressions."
+---
+
+## Overview
+
+Golden baselines are snapshot tests for agent behavior. Record a known-good trace, then assert future runs match — catching behavioral regressions from prompt tweaks, model upgrades, or code changes.
+
+## Recording a baseline
+
+Set `golden=True` to save the trace as the expected behavior:
+
+```python
+import reagent_flow
+
+with reagent_flow.session("refund-flow", golden=True, trace_dir=".reagent") as s:
+    run_agent(s)
+```
+
+The golden trace is saved at `.reagent/golden/refund-flow.trace.json`.
+
+## Asserting against a baseline
+
+```python
+with reagent_flow.session("refund-flow", trace_dir=".reagent") as s:
+    run_agent(s)
+
+s.assert_matches_baseline()
+```
+
+If the agent's behavior changed — different tools called, different arguments, different results — the assertion fails with a diff showing exactly what changed.
+
+## Ignoring noisy fields
+
+Some fields change between runs without indicating a regression (timestamps, request IDs, etc.). Use `ignore_fields` to skip them:
+
+```python
+s.assert_matches_baseline(ignore_fields={"results", "response_text"})
+```
+
+### Supported ignore patterns
+
+| Pattern | What it ignores |
+|---------|----------------|
+| `"arguments"` | All tool call arguments |
+| `"results"` | All tool results |
+| `"response_text"` | All LLM text responses |
+| `"tool_name.arg_key"` | A specific argument of a specific tool |
+
+```python
+# Ignore timestamps in lookup results, but still check everything else
+s.assert_matches_baseline(ignore_fields={"lookup.timestamp", "response_text"})
+```
+
+## Storage layout
+
+```
+.reagent/
+├── golden/
+│   └── refund-flow.trace.json     # golden baseline
+├── refund-flow.trace.json          # latest run
+```
+
+## Updating baselines
+
+When behavior *should* change (new feature, improved prompt), re-record the golden:
+
+```python
+# Option 1: golden=True in code
+with reagent_flow.session("refund-flow", golden=True, trace_dir=".reagent") as s:
+    run_agent(s)
+
+# Option 2: pytest CLI flag
+# pytest --reagent-update
+```
+
+The `--reagent-update` flag re-records all golden baselines in a single test run.
+
+## How the diff works
+
+The diff engine compares traces **positionally** — turn 0 vs turn 0, turn 1 vs turn 1:
+
+- All tool calls in each turn are compared (not just the first)
+- Tool results are compared by position in the results list
+- `call_id` is ignored (it's a random UUID that changes every run)
+- `ignore_fields` is applied to every comparison
+
+<Info>
+Golden baseline diffs are designed for deterministic test fixtures, not live LLM output. Use `ignore_fields` to handle expected variation.
+</Info>

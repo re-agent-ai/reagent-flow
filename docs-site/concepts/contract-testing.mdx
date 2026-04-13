@@ -1,0 +1,101 @@
+---
+title: "Contract Testing"
+description: "How reagent-flow treats every agent handoff as a typed contract."
+---
+
+## What is contract testing?
+
+In a multi-agent system, agents pass structured data to each other. A **contract** is the declared shape of that data — the fields, types, and values the downstream agent expects.
+
+Without contracts, schema drift is silent. An upstream team renames a field, the LLM adapts, tests pass, and the bug shows up in production as a wrong decision.
+
+**reagent-flow** makes these contracts explicit and testable:
+
+```python
+# The assessor expects this shape from the gatherer
+assessor.assert_handoff_matches(schema={
+    "release_version": str,
+    "issues": {"open_p0": int, "open_p1": int},
+})
+```
+
+If the gatherer renames `open_p0` to `p0_count`, this assertion fails at PR time with the exact field path:
+
+```
+handoff field 'issues.open_p0': missing from data
+```
+
+## Two types of contracts
+
+### Handoff contracts
+
+Validate the data passed **between agents** via `handoff_context`:
+
+```python
+with reagent_flow.session(
+    "assessor",
+    parent_trace_id=gatherer.trace.trace_id,
+    handoff_context=release_info,  # the contract target
+) as assessor:
+    # ...
+
+assessor.assert_handoff_matches(schema={...})
+```
+
+### Tool output contracts
+
+Validate the data returned **by a tool** within a single agent:
+
+```python
+gatherer.assert_tool_output_matches("get_release_info", schema={
+    "release_version": str,
+    "ci": {"pipeline": str, "coverage": float},
+})
+```
+
+## What contracts catch
+
+| Failure mode | Example | Contract that catches it |
+|---|---|---|
+| Renamed field | `open_p0` becomes `p0_count` | `assert_handoff_matches` |
+| Missing field | `open_p1` dropped entirely | `assert_handoff_matches` |
+| Wrong type | `coverage` returns `"87.3"` (string) instead of `87.3` (float) | `assert_handoff_matches` or `assert_tool_output_matches` |
+| Extra fields leaking | PII field added to handoff | `assert_no_extra_fields` |
+| Value changed | `release_version` mutated between hops | `assert_context_preserved` |
+| Parent link broken | Child session not linked to parent | `assert_handoff_received` |
+
+## The multi-agent pattern
+
+A typical contract-tested pipeline:
+
+```python
+# Agent A — produces data
+with reagent_flow.session("agent-a", trace_dir=trace_dir) as a:
+    a.log_llm_call(tool_calls=[{"name": "fetch", "arguments": {}}])
+    a.log_tool_result("fetch", result={"id": "abc", "value": 42})
+
+# Validate agent A's output shape
+a.assert_tool_output_matches("fetch", schema={"id": str, "value": int})
+
+# Agent B — consumes agent A's output
+output = a.trace.turns[0].tool_results[0].result
+with reagent_flow.session(
+    "agent-b",
+    trace_dir=trace_dir,
+    parent_trace_id=a.trace.trace_id,
+    handoff_context=output,
+) as b:
+    b.log_llm_call(tool_calls=[{"name": "process", "arguments": {}}])
+    b.log_tool_result("process", result={"status": "done"})
+
+# Validate the handoff contract
+b.assert_handoff_received(a)
+b.assert_handoff_matches(schema={"id": str, "value": int})
+b.assert_context_preserved({"id": "abc"}, fields=["id"])
+```
+
+Each assertion is a contract. If any upstream change breaks the shape, the test fails with the exact field path — before the change ships.
+
+<Info>
+Contracts are checked at test time using pytest, not at runtime. This keeps production behavior unchanged while catching drift in CI.
+</Info>
