@@ -14,21 +14,29 @@
         "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting Started",
+            "group": "Start Here",
             "pages": [
               "introduction",
-              "quickstart"
+              "installation",
+              "quickstart",
+              "examples/release-gatekeeper"
             ]
           },
           {
-            "group": "Core Concepts",
+            "group": "Core Guides",
             "pages": [
               "concepts/sessions-and-traces",
-              "concepts/contract-testing"
+              "concepts/contract-testing",
+              "adapters/overview",
+              "adapters/openai",
+              "adapters/anthropic",
+              "adapters/langchain",
+              "adapters/langgraph",
+              "adapters/crewai"
             ]
           },
           {
-            "group": "Assertions",
+            "group": "Assertions Reference",
             "pages": [
               "assertions/handoff-contracts",
               "assertions/tool-output-contracts",
@@ -38,28 +46,12 @@
             ]
           },
           {
-            "group": "Framework Adapters",
-            "pages": [
-              "adapters/openai",
-              "adapters/anthropic",
-              "adapters/langchain",
-              "adapters/langgraph",
-              "adapters/crewai"
-            ]
-          },
-          {
             "group": "Advanced",
             "pages": [
               "advanced/nested-schemas",
               "advanced/pytest-plugin",
               "advanced/async-support",
               "advanced/agent-stack-traces"
-            ]
-          },
-          {
-            "group": "Examples",
-            "pages": [
-              "examples/release-gatekeeper"
             ]
           }
         ]
@@ -72,7 +64,7 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/re-agent-ai/reagent-ai"
+      "github": "https://github.com/re-agent-ai/reagent-flow"
     }
   },
   "feedback": {

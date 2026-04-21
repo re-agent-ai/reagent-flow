@@ -37,6 +37,20 @@ cd examples/langgraph_demo
 uv run python demo.py
 ```
 
+## Run the Showcase
+
+For a fast, deterministic walkthrough or a terminal GIF, use the showcase
+script instead of the live LLM demo:
+
+```bash
+cd examples/langgraph_demo
+uv run python showcase.py
+```
+
+`showcase.py` highlights the core broken-handoff story in one short run,
+requires no API key, and produces stable output that is better suited for
+recording.
+
 ## Run as Tests
 
 `test_demo.py` exercises the same contract-assertion API the demo
@@ -101,6 +115,7 @@ prompt tweak or model upgrade.
 | `tools.py` | The three typed tools, plus a deliberately drifted `get_release_info_drifted` |
 | `agent.py` | Sub-agent builders: `build_gatherer_agent`, `build_assessor_agent`, `build_decider_agent` |
 | `orchestrator.py` | `run_pipeline` — runs the three sessions in sequence and wires handoff contexts |
+| `showcase.py` | Deterministic terminal showcase for recordings and first-time evaluation |
 | `demo.py` | Three scripted scenarios |
 | `test_demo.py` | Same scenarios expressed as pytest tests |
 

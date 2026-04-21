@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "reagent-flow-langgraph"
 version = "0.1.0"
 description = "Reagent-Flow adapter for LangGraph"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 keywords = ["ai", "agents", "testing", "llm", "langgraph"]
@@ -24,6 +25,7 @@ dependencies = ["reagent-flow>=0.1.0", "reagent-flow-langchain>=0.1.0"]
 Homepage = "https://github.com/re-agent-ai/reagent-flow"
 Repository = "https://github.com/re-agent-ai/reagent-flow"
 Issues = "https://github.com/re-agent-ai/reagent-flow/issues"
+Documentation = "https://github.com/re-agent-ai/reagent-flow/tree/main/docs-site"
 
 [project.optional-dependencies]
 dev = ["pytest>=9.0.3"]

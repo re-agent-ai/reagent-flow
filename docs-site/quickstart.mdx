@@ -5,29 +5,8 @@ description: "Install reagent-flow and write your first contract test in under 5
 
 ## Installation
 
-<CodeGroup>
-
-```bash pip
-pip install reagent-flow
-```
-
-```bash uv
-uv add reagent-flow
-```
-
-</CodeGroup>
-
-### Framework adapters
-
-Install only the adapters you need:
-
-```bash
-uv add reagent-flow-openai      # OpenAI
-uv add reagent-flow-anthropic   # Anthropic
-uv add reagent-flow-langchain   # LangChain
-uv add reagent-flow-langgraph   # LangGraph
-uv add reagent-flow-crewai      # CrewAI
-```
+Install the core package first. If you have not done that yet, start at
+[Installation](/installation).
 
 ## Your first contract test
 
@@ -93,7 +72,7 @@ If an upstream change renames `open_p0` to `p0_count`, `assert_handoff_matches` 
 ## Run the test
 
 ```bash
-pytest test_release_pipeline.py -v
+uv run pytest test_release_pipeline.py -v
 ```
 
 ## What just happened?
@@ -116,6 +95,9 @@ pytest test_release_pipeline.py -v
 ## Next steps
 
 <CardGroup cols={2}>
+  <Card title="Choose an Adapter" icon="plug" href="/adapters/overview">
+    Move from manual logging to OpenAI, Anthropic, LangChain, LangGraph, or CrewAI auto-capture.
+  </Card>
   <Card title="Core Concepts" icon="book" href="/concepts/sessions-and-traces">
     Understand sessions, traces, and the recording model.
   </Card>

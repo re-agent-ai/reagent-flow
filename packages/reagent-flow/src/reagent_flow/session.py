@@ -6,8 +6,12 @@ import contextvars
 import time
 import types
 import uuid
+from collections.abc import Mapping
 from types import EllipsisType
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from reagent_flow.assertions import SchemaValue
 
 from reagent_flow._context import _active_session
 from reagent_flow.exceptions import SessionClosedError
@@ -211,9 +215,7 @@ class Session:
             self.trace, usd=usd, model_costs=model_costs, allow_unpriced=allow_unpriced
         )
 
-    def assert_handoff_matches(
-        self, *, schema: dict[str, type | dict[str, Any] | list[Any]]
-    ) -> None:
+    def assert_handoff_matches(self, *, schema: Mapping[str, SchemaValue]) -> None:
         """Assert that handoff_context matches a schema."""
         from reagent_flow.assertions import assert_handoff_matches
 
@@ -228,7 +230,7 @@ class Session:
         assert_no_extra_fields(self.trace, allowed=allowed)
 
     def assert_tool_output_matches(
-        self, tool_name: str, *, schema: dict[str, type | dict[str, Any] | list[Any]]
+        self, tool_name: str, *, schema: Mapping[str, SchemaValue]
     ) -> None:
         """Assert that tool results match a schema."""
         from reagent_flow.assertions import assert_tool_output_matches

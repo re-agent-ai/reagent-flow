@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "reagent-flow-openai"
 version = "0.1.0"
 description = "Reagent-Flow adapter for OpenAI Python SDK"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 keywords = ["ai", "agents", "testing", "llm", "openai"]
@@ -24,6 +25,7 @@ dependencies = ["reagent-flow>=0.1.0", "openai>=2.31.0"]
 Homepage = "https://github.com/re-agent-ai/reagent-flow"
 Repository = "https://github.com/re-agent-ai/reagent-flow"
 Issues = "https://github.com/re-agent-ai/reagent-flow/issues"
+Documentation = "https://github.com/re-agent-ai/reagent-flow/tree/main/docs-site"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reagent_flow_openai"]

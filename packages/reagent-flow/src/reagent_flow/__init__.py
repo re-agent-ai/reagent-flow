@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from reagent_flow.assertions import Schema, SchemaValue
 from reagent_flow.exceptions import (
     AmbiguousToolCallError,
     ReagentAdapterWarning,
@@ -16,6 +17,8 @@ __version__ = "0.4.0"
 
 __all__ = [
     "AmbiguousToolCallError",
+    "Schema",
+    "SchemaValue",
     "Session",
     "SessionClosedError",
     "ReagentAdapterWarning",
