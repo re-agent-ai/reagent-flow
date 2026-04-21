@@ -53,6 +53,9 @@ gatherer.assert_tool_output_matches("get_release_info", schema={
 })
 ```
 
+For the full assertion surface, see [Handoff Contracts](/assertions/handoff-contracts) and
+[Tool Output Contracts](/assertions/tool-output-contracts).
+
 ## What contracts catch
 
 | Failure mode | Example | Contract that catches it |
@@ -64,9 +67,9 @@ gatherer.assert_tool_output_matches("get_release_info", schema={
 | Value changed | `release_version` mutated between hops | `assert_context_preserved` |
 | Parent link broken | Child session not linked to parent | `assert_handoff_received` |
 
-## The multi-agent pattern
+## Typical workflow
 
-A typical contract-tested pipeline:
+A contract-tested pipeline usually looks like this:
 
 ```python
 # Agent A — produces data
@@ -94,7 +97,7 @@ b.assert_handoff_matches(schema={"id": str, "value": int})
 b.assert_context_preserved({"id": "abc"}, fields=["id"])
 ```
 
-Each assertion is a contract. If any upstream change breaks the shape, the test fails with the exact field path — before the change ships.
+The shape is the point: if any upstream change breaks it, the test fails with the exact field path before the change ships.
 
 <Info>
 Contracts are checked at test time using pytest, not at runtime. This keeps production behavior unchanged while catching drift in CI.

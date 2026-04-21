@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Mapping
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any
 
@@ -344,6 +345,7 @@ def _strict_isinstance(value: Any, expected_type: type) -> bool:
 
 
 SchemaValue = type | dict[str, Any] | list[Any]
+Schema = Mapping[str, SchemaValue]
 
 
 def _validate_schema(
@@ -422,9 +424,7 @@ def _validate_schema(
     raise TypeError(msg)
 
 
-def assert_handoff_matches(
-    child_trace: Trace, *, schema: dict[str, type | dict[str, Any] | list[Any]]
-) -> None:
+def assert_handoff_matches(child_trace: Trace, *, schema: Schema) -> None:
     """Validate handoff_context against a schema.
 
     Supports flat types (v0.3), nested dicts, typed lists, and
@@ -474,7 +474,7 @@ def assert_tool_output_matches(
     trace: Trace,
     tool_name: str,
     *,
-    schema: dict[str, type | dict[str, Any] | list[Any]],
+    schema: Schema,
 ) -> None:
     """Validate tool result values against a schema.
 

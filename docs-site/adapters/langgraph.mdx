@@ -6,9 +6,17 @@ description: "Auto-capture tool calls and results from LangGraph agents with gra
 
 ## Installation
 
-```bash
+<CodeGroup>
+
+```bash pip
+pip install reagent-flow-langgraph
+```
+
+```bash uv
 uv add reagent-flow-langgraph
 ```
+
+</CodeGroup>
 
 ## Setup
 
@@ -33,6 +41,7 @@ s.assert_called("my_tool")
 ## Example with a ReAct agent
 
 ```python
+import json
 from langgraph.prebuilt import create_react_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool

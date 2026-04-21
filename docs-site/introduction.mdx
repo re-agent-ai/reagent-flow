@@ -26,7 +26,7 @@ assessor_session.assert_handoff_matches(schema={
 
 If the upstream agent renames `open_p0` to `p0_count`, this assertion fails at PR time, not in prod.
 
-## What you get
+## What it gives you
 
 <CardGroup cols={2}>
   <Card title="Handoff contracts" icon="handshake">
@@ -49,20 +49,23 @@ If the upstream agent renames `open_p0` to `p0_count`, this assertion fails at P
   </Card>
 </CardGroup>
 
-## Key concepts
+## Start here
 
-| Concept | Description |
-|---------|-------------|
-| **Session** | A context manager that records tool calls for one agent run; may declare a `parent_trace_id` and `handoff_context` to form a link in a multi-agent chain |
-| **Handoff context** | The structured payload passed from one agent session to the next — the target of contract assertions |
-| **Trace** | The full sequence of turns captured during a session |
-| **Contract** | A declared schema (`{field: type}`) validated against a handoff or tool result |
-| **Golden baseline** | A saved trace used as the expected behavior for future runs |
-| **Agent Stack Trace** | A readable dump of every turn, attached to assertion failures |
+<CardGroup cols={3}>
+  <Card title="Install" icon="download" href="/installation">
+    Install the core package and the adapter that fits your stack.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Write your first contract test with manual instrumentation.
+  </Card>
+  <Card title="Release Gatekeeper" icon="shield-check" href="/examples/release-gatekeeper">
+    See the flagship multi-agent broken-handoff demo.
+  </Card>
+</CardGroup>
 
 ## Framework support
 
-reagent-flow has a **zero-dependency core** with thin adapters for the major agent frameworks:
+reagent-flow has a **zero-dependency core** plus thin adapters for:
 
 - OpenAI
 - Anthropic
@@ -70,6 +73,4 @@ reagent-flow has a **zero-dependency core** with thin adapters for the major age
 - LangGraph
 - CrewAI
 
-<Card title="Get started" icon="rocket" href="/quickstart">
-  Install reagent-flow and write your first contract test in under 5 minutes.
-</Card>
+For implementation details, see [Framework Adapters](/adapters/overview).

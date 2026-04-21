@@ -28,8 +28,14 @@ import os
 import shutil
 import sys
 import tempfile
+from pathlib import Path
 
-from orchestrator import run_pipeline
+from dotenv import load_dotenv
+from reagent_flow import Schema
+
+load_dotenv(Path(__file__).parent / ".env")
+
+from orchestrator import run_pipeline  # noqa: E402 — must load .env before orchestrator
 
 # ---------------------------------------------------------------------------
 # Terminal colors
@@ -56,7 +62,7 @@ def divider(title: str) -> None:
 # Schemas — declared once, reused across scenarios
 # ---------------------------------------------------------------------------
 
-RELEASE_INFO_SCHEMA = {
+RELEASE_INFO_SCHEMA: Schema = {
     "release_version": str,
     "branch": str,
     "ci": {
@@ -76,7 +82,7 @@ RELEASE_INFO_SCHEMA = {
     ],
 }
 
-RISK_ASSESSMENT_SCHEMA = {
+RISK_ASSESSMENT_SCHEMA: Schema = {
     "release_version": str,
     "risk_level": str,
     "justification": str,

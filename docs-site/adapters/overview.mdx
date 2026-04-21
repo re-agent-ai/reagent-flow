@@ -1,0 +1,57 @@
+---
+title: "Framework Adapters"
+description: "Choose the reagent-flow adapter that matches your agent stack."
+---
+
+## Overview
+
+The `reagent-flow` core can be used directly, but most users will want an
+adapter that auto-captures tool calls and results from their framework.
+
+All adapters follow the same principle:
+
+- detect the active `reagent-flow` session
+- record tool calls and tool results into the trace
+- preserve original framework behavior if logging fails
+
+## Choose your adapter
+
+| Adapter | Best for | API |
+|---------|----------|-----|
+| [OpenAI](/adapters/openai) | OpenAI Python SDK tool-calling loops | `patch(OpenAI())` |
+| [Anthropic](/adapters/anthropic) | Anthropic Messages API with `tool_use` / `tool_result` | `patch(Anthropic())` |
+| [LangChain](/adapters/langchain) | Chains and agents using callback handlers | `ReagentCallbackHandler()` |
+| [LangGraph](/adapters/langgraph) | Graphs and multi-agent pipelines built on LangGraph | `ReagentGraphTracer()` |
+| [CrewAI](/adapters/crewai) | Crew-based tool execution | `instrument(crew)` |
+
+## Typical decision tree
+
+<Steps>
+  <Step title="Using OpenAI or Anthropic directly">
+    Use the SDK adapter and wrap the client with `patch()`.
+  </Step>
+  <Step title="Using LangChain or LangGraph">
+    Use the callback-based tracer and pass it through `config={"callbacks": [...]}`.
+  </Step>
+  <Step title="Using CrewAI">
+    Use `instrument()` to wrap the crew before kickoff.
+  </Step>
+  <Step title="Not using a supported framework">
+    Start with the core package and log calls manually via `session`, `log_llm_call`, and `log_tool_result`.
+  </Step>
+</Steps>
+
+## What every adapter gives you
+
+- tool-call recording
+- tool-result capture
+- assertion compatibility with the core API
+- Agent Stack Traces on failure
+
+The assertion surface stays the same no matter how the trace was captured:
+
+```python
+s.assert_called("lookup_order")
+s.assert_tool_output_matches("lookup_order", schema={"status": str})
+s.assert_handoff_matches(schema={"release_version": str})
+```

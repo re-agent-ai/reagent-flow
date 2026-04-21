@@ -1,0 +1,72 @@
+---
+title: "Installation"
+description: "Install reagent-flow and choose the adapter path that fits your stack."
+---
+
+## Core package
+
+Install the zero-dependency core first:
+
+<CodeGroup>
+
+```bash pip
+pip install reagent-flow
+```
+
+```bash uv
+uv add reagent-flow
+```
+
+</CodeGroup>
+
+## Framework adapters
+
+Install only the adapters you need:
+
+<CodeGroup>
+
+```bash pip
+pip install reagent-flow-openai
+pip install reagent-flow-anthropic
+pip install reagent-flow-langchain
+pip install reagent-flow-langgraph
+pip install reagent-flow-crewai
+```
+
+```bash uv
+uv add reagent-flow-openai
+uv add reagent-flow-anthropic
+uv add reagent-flow-langchain
+uv add reagent-flow-langgraph
+uv add reagent-flow-crewai
+```
+
+</CodeGroup>
+
+## Which path should you use?
+
+<CardGroup cols={3}>
+  <Card title="Core Only" icon="box" href="/quickstart">
+    Start with manual `session`, `log_llm_call`, and `log_tool_result` instrumentation.
+  </Card>
+  <Card title="Adapter Path" icon="plug" href="/adapters/overview">
+    Auto-capture traces from OpenAI, Anthropic, LangChain, LangGraph, or CrewAI.
+  </Card>
+  <Card title="See the Demo" icon="shield-check" href="/examples/release-gatekeeper">
+    Jump straight to the flagship multi-agent showcase.
+  </Card>
+</CardGroup>
+
+## Verify the install
+
+```python
+import reagent_flow
+
+with reagent_flow.session("smoke-test") as s:
+    s.log_llm_call(tool_calls=[{"name": "ping", "arguments": {}}])
+    s.log_tool_result("ping", result={"ok": True})
+
+s.assert_called("ping")
+```
+
+If that passes, the core install is working.

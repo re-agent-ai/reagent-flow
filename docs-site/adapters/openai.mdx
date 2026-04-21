@@ -6,15 +6,24 @@ description: "Auto-capture tool calls and results from the OpenAI Python SDK."
 
 ## Installation
 
-```bash
+<CodeGroup>
+
+```bash pip
+pip install reagent-flow-openai
+```
+
+```bash uv
 uv add reagent-flow-openai
 ```
+
+</CodeGroup>
 
 ## Setup
 
 Wrap your OpenAI client with `patch()`:
 
 ```python
+import json
 from openai import OpenAI
 from reagent_flow_openai import patch
 import reagent_flow

@@ -104,6 +104,17 @@ DECISION_SCHEMA = {
 
 ## Running the demo
 
+### Showcase mode (recommended for first run / recording)
+
+```bash
+cd examples/langgraph_demo
+uv run python showcase.py
+```
+
+`showcase.py` is the recommended entry point for product walkthroughs. It is
+deterministic, requires no API key, and highlights the broken-handoff story in
+one short terminal run.
+
 ### Live (with Gemini API key)
 
 ```bash
@@ -128,9 +139,10 @@ The test file exercises the same contract assertions but builds sessions manuall
 | `tools.py` | The three typed tools, plus a deliberately drifted `get_release_info_drifted` |
 | `agent.py` | Sub-agent builders using LangGraph `create_react_agent` |
 | `orchestrator.py` | `run_pipeline` — runs the three sessions in sequence and wires handoff contexts |
+| `showcase.py` | Deterministic terminal showcase for GIFs, demos, and first-time evaluation |
 | `demo.py` | Three scripted scenarios with live LLM calls |
 | `test_demo.py` | Same scenarios as pytest tests (no LLM, runs in CI) |
 
-<Card title="View source" icon="github" href="https://github.com/re-agent-ai/reagent-ai/tree/master/examples/langgraph_demo">
+<Card title="View source" icon="github" href="https://github.com/re-agent-ai/reagent-flow/tree/main/examples/langgraph_demo">
   Browse the full demo source code on GitHub.
 </Card>
