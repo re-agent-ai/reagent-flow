@@ -13,7 +13,7 @@ from reagent_flow.exceptions import (
 )
 from reagent_flow.session import Session
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [
     "AmbiguousToolCallError",
