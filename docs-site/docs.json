@@ -8,58 +8,54 @@
     "dark": "#4F46E5"
   },
   "navigation": {
-    "tabs": [
+    "groups": [
       {
-        "groups": [
-          {
-            "group": "Getting Started",
-            "pages": [
-              "introduction",
-              "quickstart"
-            ]
-          },
-          {
-            "group": "Core Concepts",
-            "pages": [
-              "concepts/sessions-and-traces",
-              "concepts/contract-testing"
-            ]
-          },
-          {
-            "group": "Assertions",
-            "pages": [
-              "assertions/handoff-contracts",
-              "assertions/tool-output-contracts",
-              "assertions/flow-and-count",
-              "assertions/golden-baselines",
-              "assertions/token-and-cost-guards"
-            ]
-          },
-          {
-            "group": "Framework Adapters",
-            "pages": [
-              "adapters/openai",
-              "adapters/anthropic",
-              "adapters/langchain",
-              "adapters/langgraph",
-              "adapters/crewai"
-            ]
-          },
-          {
-            "group": "Advanced",
-            "pages": [
-              "advanced/nested-schemas",
-              "advanced/pytest-plugin",
-              "advanced/async-support",
-              "advanced/agent-stack-traces"
-            ]
-          },
-          {
-            "group": "Examples",
-            "pages": [
-              "examples/vendor-onboarding"
-            ]
-          }
+        "group": "Getting Started",
+        "pages": [
+          "introduction",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Core Concepts",
+        "pages": [
+          "concepts/sessions-and-traces",
+          "concepts/contract-testing"
+        ]
+      },
+      {
+        "group": "Assertions",
+        "pages": [
+          "assertions/handoff-contracts",
+          "assertions/tool-output-contracts",
+          "assertions/flow-and-count",
+          "assertions/golden-baselines",
+          "assertions/token-and-cost-guards"
+        ]
+      },
+      {
+        "group": "Framework Adapters",
+        "pages": [
+          "adapters/openai",
+          "adapters/anthropic",
+          "adapters/langchain",
+          "adapters/langgraph",
+          "adapters/crewai"
+        ]
+      },
+      {
+        "group": "Advanced",
+        "pages": [
+          "advanced/nested-schemas",
+          "advanced/pytest-plugin",
+          "advanced/async-support",
+          "advanced/agent-stack-traces"
+        ]
+      },
+      {
+        "group": "Examples",
+        "pages": [
+          "examples/vendor-onboarding"
         ]
       }
     ]
