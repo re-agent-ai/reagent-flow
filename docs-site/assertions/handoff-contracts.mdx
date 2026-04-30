@@ -59,12 +59,12 @@ child.assert_handoff_matches(schema={
 ### Failure message
 
 ```
-handoff field 'issues.open_p0': missing from data
+handoff field 'data_access.contains_customer_pii': missing from data
 
-AGENT STACK TRACE — assessor
+AGENT STACK TRACE — security-review
 ================================
-Turn 0: assess_risk(risk_level="HIGH")
-  → {"risk_level": "HIGH"}
+Turn 0: assess_security_risk(vendor_name="ClearVoice AI")
+  → {"risk_level": "LOW"}
 ```
 
 ## assert_handoff_has_fields
@@ -104,28 +104,40 @@ Compares the `source` dict values against the child's `handoff_context` for the 
 def test_handoff_contracts(tmp_path):
     trace_dir = str(tmp_path)
 
-    with reagent_flow.session("orchestrator", trace_dir=trace_dir) as parent:
+    with reagent_flow.session("intake", trace_dir=trace_dir) as parent:
         parent.log_llm_call(
-            tool_calls=[{"name": "plan", "arguments": {"user_id": "u-42"}}],
+            tool_calls=[{"name": "extract_vendor_packet", "arguments": {"vendor_name": "ClearVoice AI"}}],
         )
-        parent.log_tool_result("plan", result={"user_id": "u-42", "step": "search"})
+        parent.log_tool_result(
+            "extract_vendor_packet",
+            result={
+                "vendor_name": "ClearVoice AI",
+                "data_access": {"contains_customer_pii": True},
+            },
+        )
 
-    handoff = {"user_id": "u-42", "step": "search"}
+    handoff = {
+        "vendor_name": "ClearVoice AI",
+        "data_access": {"contains_customer_pii": True},
+    }
     with reagent_flow.session(
-        "researcher",
+        "security-review",
         trace_dir=trace_dir,
         parent_trace_id=parent.trace.trace_id,
         handoff_context=handoff,
     ) as child:
         child.log_llm_call(
-            tool_calls=[{"name": "search", "arguments": {"q": "test"}}],
+            tool_calls=[{"name": "assess_security_risk", "arguments": {"vendor_name": "ClearVoice AI"}}],
         )
-        child.log_tool_result("search", result={"count": 5})
+        child.log_tool_result("assess_security_risk", result={"risk_level": "HIGH"})
 
     # All handoff contracts
     child.assert_handoff_received(parent)
-    child.assert_handoff_has_fields(["user_id", "step"])
-    child.assert_handoff_matches(schema={"user_id": str, "step": str})
-    child.assert_no_extra_fields(allowed=["user_id", "step"])
-    child.assert_context_preserved({"user_id": "u-42"}, fields=["user_id"])
+    child.assert_handoff_has_fields(["vendor_name", "data_access"])
+    child.assert_handoff_matches(schema={
+        "vendor_name": str,
+        "data_access": {"contains_customer_pii": bool},
+    })
+    child.assert_no_extra_fields(allowed=["vendor_name", "data_access"])
+    child.assert_context_preserved({"vendor_name": "ClearVoice AI"}, fields=["vendor_name"])
 ```

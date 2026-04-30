@@ -12,14 +12,14 @@ Multi-agent systems fail at the seams. Agent A hands structured data to Agent B,
 
 ```python
 # Declare the contract at every agent boundary
-assessor.assert_handoff_matches(schema={
-    "release_version": str,
-    "ci": {"pipeline": str, "coverage": float},
-    "issues": {"open_p0": int, "open_p1": int},
+security.assert_handoff_matches(schema={
+    "vendor_name": str,
+    "data_access": {"contains_customer_pii": bool},
+    "compliance": {"subprocessors": [str]},
 })
 ```
 
-If the upstream agent renames `open_p0` to `p0_count`, this assertion fails at PR time with the exact field path: `handoff field 'issues.open_p0': missing from data`.
+If the upstream agent renames `contains_customer_pii`, this assertion fails at PR time with the exact field path: `handoff field 'data_access.contains_customer_pii': missing from data`.
 
 When assertions fail, you get an **Agent Stack Trace** -- a readable dump of every turn showing what went wrong and where.
 

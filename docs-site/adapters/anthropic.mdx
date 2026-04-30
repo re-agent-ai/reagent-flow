@@ -6,24 +6,15 @@ description: "Auto-capture tool calls and results from the Anthropic Python SDK.
 
 ## Installation
 
-<CodeGroup>
-
-```bash pip
-pip install reagent-flow-anthropic
-```
-
-```bash uv
+```bash
 uv add reagent-flow-anthropic
 ```
-
-</CodeGroup>
 
 ## Setup
 
 Wrap your Anthropic client with `patch()`:
 
 ```python
-import json
 from anthropic import Anthropic
 from reagent_flow_anthropic import patch
 import reagent_flow

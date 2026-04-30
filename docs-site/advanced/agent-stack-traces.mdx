@@ -41,13 +41,13 @@ Agent Stack Traces are attached to **every** assertion failure — handoff contr
 For multi-agent handoff failures, the stack trace shows the child session's full history plus the handoff context:
 
 ```
-AGENT STACK TRACE — assessor
+AGENT STACK TRACE — security-review
 ================================
-Handoff context: {"release_version": "v2.3.1", "issues": {"p0_count": 1}}
-Turn 0: assess_risk(risk_level="HIGH")
-  → {"risk_level": "HIGH", "justification": "..."}
+Handoff context: {"vendor_name": "ClearVoice AI", "data_access": {"handles_personal_data": true}}
+Turn 0: assess_security_risk(vendor_name="ClearVoice AI")
+  → {"risk_level": "LOW", "reason": "..."}
 ================================
-✗ handoff field 'issues.open_p0': missing from data
+✗ handoff field 'data_access.contains_customer_pii': missing from data
 ```
 
-The `Handoff context` line shows exactly what the child received, making it easy to spot the drift (here: `p0_count` instead of `open_p0`).
+The `Handoff context` line shows exactly what the child received, making it easy to spot the drift (here: `handles_personal_data` instead of `contains_customer_pii`).

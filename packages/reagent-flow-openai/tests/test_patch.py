@@ -133,7 +133,7 @@ def test_patch_tool_result_assert_tool_output_matches() -> None:
     """The captured tool result should satisfy assert_tool_output_matches."""
     client = MagicMock()
     client.chat.completions.create.side_effect = [
-        _tool_call_response("get_release_info", '{"version": "v2.3.1"}', "call_1"),
+        _tool_call_response("extract_vendor_packet", '{"request_id": "VR-42"}', "call_1"),
         _text_response("done"),
     ]
     patched = patch(client)
@@ -146,14 +146,14 @@ def test_patch_tool_result_assert_tool_output_matches() -> None:
                 {
                     "role": "tool",
                     "tool_call_id": "call_1",
-                    "content": '{"release_version": "v2.3.1", "open_p0": 1}',
+                    "content": '{"vendor_name": "ClearVoice AI", "contains_customer_pii": true}',
                 },
             ],
         )
 
     s.assert_tool_output_matches(
-        "get_release_info",
-        schema={"release_version": str, "open_p0": int},
+        "extract_vendor_packet",
+        schema={"vendor_name": str, "contains_customer_pii": bool},
     )
 
 

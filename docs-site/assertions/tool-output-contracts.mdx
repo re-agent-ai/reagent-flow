@@ -10,10 +10,10 @@ Tool output contracts validate the structure of what a tool returns. When a tool
 ## assert_tool_output_matches
 
 ```python
-s.assert_tool_output_matches("get_release_info", schema={
-    "release_version": str,
-    "ci": {"pipeline": str, "coverage": float},
-    "issues": {"open_p0": int, "open_p1": int},
+s.assert_tool_output_matches("extract_vendor_packet", schema={
+    "vendor_name": str,
+    "data_access": {"retention_days": int},
+    "compliance": {"subprocessors": [str]},
 })
 ```
 
@@ -26,12 +26,12 @@ s.assert_tool_output_matches("get_release_info", schema={
 ### Failure message
 
 ```
-tool 'get_release_info' result field 'ci.coverage': expected float, got str
+tool 'extract_vendor_packet' result field 'data_access.retention_days': expected int, got str
 
-AGENT STACK TRACE — gatherer
+AGENT STACK TRACE — intake
 ================================
-Turn 0: get_release_info(version="v2.3.1")
-  → {"release_version": "v2.3.1", "ci": {"pipeline": "passed", "coverage": "87.3"}, ...}
+Turn 0: extract_vendor_packet(vendor_name="ClearVoice AI")
+  → {"vendor_name": "ClearVoice AI", "data_access": {"retention_days": "30"}, ...}
 ```
 
 ## Schema format

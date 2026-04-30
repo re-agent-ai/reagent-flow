@@ -6,17 +6,9 @@ description: "Auto-capture tool calls and results from LangGraph agents with gra
 
 ## Installation
 
-<CodeGroup>
-
-```bash pip
-pip install reagent-flow-langgraph
-```
-
-```bash uv
+```bash
 uv add reagent-flow-langgraph
 ```
-
-</CodeGroup>
 
 ## Setup
 
@@ -49,23 +41,23 @@ from reagent_flow_langgraph import ReagentGraphTracer
 import reagent_flow
 
 @tool
-def get_release_info(version: str) -> str:
-    """Look up release information."""
-    return json.dumps({"release_version": version, "status": "passed"})
+def extract_vendor_packet(vendor_name: str) -> str:
+    """Return the intake packet for a vendor review."""
+    return json.dumps({"vendor_name": vendor_name, "status": "captured"})
 
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
-agent = create_react_agent(llm, [get_release_info])
+agent = create_react_agent(llm, [extract_vendor_packet])
 tracer = ReagentGraphTracer()
 
-with reagent_flow.session("gatherer") as s:
+with reagent_flow.session("intake") as s:
     agent.invoke(
-        {"messages": [("user", "Get info for v2.3.1")]},
+        {"messages": [("user", "Prepare a vendor packet for ClearVoice AI")]},
         config={"callbacks": [tracer]},
     )
 
-s.assert_called("get_release_info")
-s.assert_tool_output_matches("get_release_info", schema={
-    "release_version": str,
+s.assert_called("extract_vendor_packet")
+s.assert_tool_output_matches("extract_vendor_packet", schema={
+    "vendor_name": str,
     "status": str,
 })
 ```
@@ -76,24 +68,24 @@ LangGraph excels at multi-agent architectures. Use separate reagent-flow session
 
 ```python
 # Agent A
-with reagent_flow.session("gatherer", trace_dir=trace_dir) as a:
+with reagent_flow.session("intake", trace_dir=trace_dir) as a:
     agent_a.invoke(task_a, config={"callbacks": [ReagentGraphTracer()]})
 
 # Extract structured output from agent A
-release_info = a.trace.turns[-1].tool_results[0].result
+vendor_packet = a.trace.turns[-1].tool_results[0].result
 
 # Agent B receives the handoff
 with reagent_flow.session(
-    "assessor",
+    "security-review",
     trace_dir=trace_dir,
     parent_trace_id=a.trace.trace_id,
-    handoff_context=release_info,
+    handoff_context=vendor_packet,
 ) as b:
     agent_b.invoke(task_b, config={"callbacks": [ReagentGraphTracer()]})
 
 # Contract at the boundary
 b.assert_handoff_received(a)
-b.assert_handoff_matches(schema={"release_version": str, "status": str})
+b.assert_handoff_matches(schema={"vendor_name": str, "status": str})
 ```
 
-See [Release Gatekeeper Example](/examples/release-gatekeeper) for a complete three-agent pipeline.
+See [Vendor Onboarding Showcase](/examples/vendor-onboarding) for a complete multi-agent pipeline.

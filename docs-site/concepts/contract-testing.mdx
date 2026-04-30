@@ -12,17 +12,17 @@ Without contracts, schema drift is silent. An upstream team renames a field, the
 **reagent-flow** makes these contracts explicit and testable:
 
 ```python
-# The assessor expects this shape from the gatherer
-assessor.assert_handoff_matches(schema={
-    "release_version": str,
-    "issues": {"open_p0": int, "open_p1": int},
+# The security review agent expects this shape from intake
+security.assert_handoff_matches(schema={
+    "vendor_name": str,
+    "data_access": {"contains_customer_pii": bool},
 })
 ```
 
-If the gatherer renames `open_p0` to `p0_count`, this assertion fails at PR time with the exact field path:
+If intake renames `contains_customer_pii` to `handles_personal_data`, this assertion fails at PR time with the exact field path:
 
 ```
-handoff field 'issues.open_p0': missing from data
+handoff field 'data_access.contains_customer_pii': missing from data
 ```
 
 ## Two types of contracts
@@ -33,13 +33,13 @@ Validate the data passed **between agents** via `handoff_context`:
 
 ```python
 with reagent_flow.session(
-    "assessor",
-    parent_trace_id=gatherer.trace.trace_id,
-    handoff_context=release_info,  # the contract target
-) as assessor:
+    "security-review",
+    parent_trace_id=intake.trace.trace_id,
+    handoff_context=vendor_packet,  # the contract target
+) as security:
     # ...
 
-assessor.assert_handoff_matches(schema={...})
+security.assert_handoff_matches(schema={...})
 ```
 
 ### Tool output contracts
@@ -47,29 +47,26 @@ assessor.assert_handoff_matches(schema={...})
 Validate the data returned **by a tool** within a single agent:
 
 ```python
-gatherer.assert_tool_output_matches("get_release_info", schema={
-    "release_version": str,
-    "ci": {"pipeline": str, "coverage": float},
+intake.assert_tool_output_matches("extract_vendor_packet", schema={
+    "vendor_name": str,
+    "compliance": {"subprocessors": [str]},
 })
 ```
-
-For the full assertion surface, see [Handoff Contracts](/assertions/handoff-contracts) and
-[Tool Output Contracts](/assertions/tool-output-contracts).
 
 ## What contracts catch
 
 | Failure mode | Example | Contract that catches it |
 |---|---|---|
-| Renamed field | `open_p0` becomes `p0_count` | `assert_handoff_matches` |
-| Missing field | `open_p1` dropped entirely | `assert_handoff_matches` |
-| Wrong type | `coverage` returns `"87.3"` (string) instead of `87.3` (float) | `assert_handoff_matches` or `assert_tool_output_matches` |
-| Extra fields leaking | PII field added to handoff | `assert_no_extra_fields` |
-| Value changed | `release_version` mutated between hops | `assert_context_preserved` |
+| Renamed field | `contains_customer_pii` becomes `handles_personal_data` | `assert_handoff_matches` |
+| Missing field | `subprocessors` dropped entirely | `assert_handoff_matches` |
+| Wrong type | `retention_days` returns `"30"` instead of `30` | `assert_handoff_matches` or `assert_tool_output_matches` |
+| Extra fields leaking | Internal notes added to the handoff | `assert_no_extra_fields` |
+| Value changed | `vendor_name` mutated between hops | `assert_context_preserved` |
 | Parent link broken | Child session not linked to parent | `assert_handoff_received` |
 
-## Typical workflow
+## The multi-agent pattern
 
-A contract-tested pipeline usually looks like this:
+A typical contract-tested pipeline:
 
 ```python
 # Agent A — produces data
@@ -97,7 +94,7 @@ b.assert_handoff_matches(schema={"id": str, "value": int})
 b.assert_context_preserved({"id": "abc"}, fields=["id"])
 ```
 
-The shape is the point: if any upstream change breaks it, the test fails with the exact field path before the change ships.
+Each assertion is a contract. If any upstream change breaks the shape, the test fails with the exact field path — before the change ships.
 
 <Info>
 Contracts are checked at test time using pytest, not at runtime. This keeps production behavior unchanged while catching drift in CI.

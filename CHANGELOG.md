@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - LangChain adapter `on_tool_end` now unwraps `ToolMessage.content` and JSON-parses dict/list strings before storing
 - `_log_prior_tool_results()` + `_parse_tool_content()` helpers in both OpenAI and Anthropic adapters
 - `_unwrap_tool_output()` helper in LangChain adapter
-- Three-sub-agent Release Gatekeeper demo (`examples/langgraph_demo/`) with Gatherer, Assessor, Decider pipeline
+- Three-sub-agent contract demo with parent/child session wiring
 - `orchestrator.py` — runs three sessions in sequence with `parent_trace_id`/`handoff_context` wiring
 - `get_release_info_drifted` tool variant for simulating upstream schema drift
 - `test_demo.py` — mock-based tests exercising the contract story (no live LLM calls)
