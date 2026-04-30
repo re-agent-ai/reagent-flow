@@ -3,15 +3,13 @@
   "name": "reagent-flow",
   "theme": "sequoia",
   "colors": {
-    "primary": "#6366F1",
+    "primary": "#2E46FF",
     "light": "#818CF8",
     "dark": "#4F46E5"
   },
-  "favicon": "/favicon.svg",
   "navigation": {
     "tabs": [
       {
-        "tab": "Documentation",
         "groups": [
           {
             "group": "Getting Started",
