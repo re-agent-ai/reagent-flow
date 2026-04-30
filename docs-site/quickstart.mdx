@@ -5,99 +5,140 @@ description: "Install reagent-flow and write your first contract test in under 5
 
 ## Installation
 
-Install the core package first. If you have not done that yet, start at
-[Installation](/installation).
+<CodeGroup>
+
+```bash pip
+pip install reagent-flow
+```
+
+```bash uv
+uv add reagent-flow
+```
+
+</CodeGroup>
+
+### Framework adapters
+
+Install only the adapters you need:
+
+```bash
+uv add reagent-flow-openai      # OpenAI
+uv add reagent-flow-anthropic   # Anthropic
+uv add reagent-flow-langchain   # LangChain
+uv add reagent-flow-langgraph   # LangGraph
+uv add reagent-flow-crewai      # CrewAI
+```
 
 ## Your first contract test
 
-Contract-test a two-agent handoff: the **gatherer** pulls release data, the **assessor** consumes it. reagent-flow validates the shape of what flows between them.
+Contract-test a two-agent handoff: the **intake** agent builds a vendor packet, and the **security review** agent consumes it. reagent-flow validates the shape of what flows between them.
 
 ```python
 import reagent_flow
 
 
-def test_release_pipeline(tmp_path):
+VENDOR_PACKET_SCHEMA = {
+    "vendor_name": str,
+    "data_access": {
+        "contains_customer_pii": bool,
+        "data_categories": [str],
+        "storage_region": str,
+        "retention_days": int,
+    },
+    "compliance": {
+        "soc2_available": bool,
+        "dpa_required": bool,
+        "subprocessors": [str],
+    },
+}
+
+
+def test_vendor_onboarding(tmp_path):
     trace_dir = str(tmp_path)
 
-    # Phase 1 — gatherer agent records release info
-    with reagent_flow.session("gatherer", trace_dir=trace_dir) as gather:
-        gather.log_llm_call(
-            tool_calls=[{"name": "get_release_info", "arguments": {"version": "v2.3.1"}}],
+    # Phase 1 — intake agent extracts the vendor packet
+    with reagent_flow.session("intake", trace_dir=trace_dir) as intake:
+        intake.log_llm_call(
+            tool_calls=[{"name": "extract_vendor_packet", "arguments": {"vendor_name": "ClearVoice AI"}}],
         )
-        gather.log_tool_result(
-            "get_release_info",
+        intake.log_tool_result(
+            "extract_vendor_packet",
             result={
-                "release_version": "v2.3.1",
-                "ci": {"pipeline": "passed", "coverage": 87.3},
-                "issues": {"open_p0": 1, "open_p1": 3},
+                "vendor_name": "ClearVoice AI",
+                "data_access": {
+                    "contains_customer_pii": True,
+                    "data_categories": ["call_transcripts", "account_metadata"],
+                    "storage_region": "us-central1",
+                    "retention_days": 30,
+                },
+                "compliance": {
+                    "soc2_available": True,
+                    "dpa_required": True,
+                    "subprocessors": ["AssemblyAI", "BigQuery"],
+                },
             },
         )
 
     # Contract on the tool output
-    gather.assert_tool_output_matches("get_release_info", schema={
-        "release_version": str,
-        "ci": {"pipeline": str, "coverage": float},
-        "issues": {"open_p0": int, "open_p1": int},
-    })
+    intake.assert_tool_output_matches("extract_vendor_packet", schema=VENDOR_PACKET_SCHEMA)
 
-    # Phase 2 — assessor receives the gatherer's output as a handoff
-    release_info = gather.trace.turns[0].tool_results[0].result
+    # Phase 2 — security receives the intake packet as a handoff
+    vendor_packet = intake.trace.turns[0].tool_results[0].result
     with reagent_flow.session(
-        "assessor",
+        "security-review",
         trace_dir=trace_dir,
-        parent_trace_id=gather.trace.trace_id,
-        handoff_context=release_info,
-    ) as assess:
-        assess.log_llm_call(
-            tool_calls=[{"name": "assess_risk", "arguments": {"risk_level": "HIGH"}}],
+        parent_trace_id=intake.trace.trace_id,
+        handoff_context=vendor_packet,
+    ) as security:
+        security.log_llm_call(
+            tool_calls=[{"name": "assess_security_risk", "arguments": {"vendor_name": "ClearVoice AI"}}],
         )
-        assess.log_tool_result("assess_risk", result={"risk_level": "HIGH"})
+        security.log_tool_result(
+            "assess_security_risk",
+            result={
+                "risk_level": "HIGH",
+                "reason": "Vendor handles customer call transcripts.",
+            },
+        )
 
     # Contract on the handoff — this is where multi-agent systems break
-    assess.assert_handoff_received(gather)
-    assess.assert_handoff_matches(schema={
-        "release_version": str,
-        "ci": {"pipeline": str, "coverage": float},
-        "issues": {"open_p0": int, "open_p1": int},
-    })
-    assess.assert_context_preserved(
-        {"release_version": "v2.3.1"}, fields=["release_version"]
+    security.assert_handoff_received(intake)
+    security.assert_handoff_matches(schema=VENDOR_PACKET_SCHEMA)
+    security.assert_context_preserved(
+        {"vendor_name": "ClearVoice AI"}, fields=["vendor_name"]
     )
 ```
 
 <Info>
-If an upstream change renames `open_p0` to `p0_count`, `assert_handoff_matches` fails with the exact path: `handoff field 'issues.open_p0': missing from data` — attached to an Agent Stack Trace.
+If an upstream change renames `contains_customer_pii` to `handles_personal_data`, `assert_handoff_matches` fails with the exact path: `handoff field 'data_access.contains_customer_pii': missing from data` — attached to an Agent Stack Trace.
 </Info>
 
 ## Run the test
 
 ```bash
-uv run pytest test_release_pipeline.py -v
+uv run pytest test_vendor_onboarding.py -v
 ```
 
 ## What just happened?
 
 <Steps>
-  <Step title="Recorded the gatherer's work">
+  <Step title="Recorded the intake agent's work">
     The `session` context manager captured every tool call and result into a structured trace.
   </Step>
   <Step title="Validated the tool output">
-    `assert_tool_output_matches` checked that `get_release_info` returned data matching the declared schema.
+    `assert_tool_output_matches` checked that `extract_vendor_packet` returned data matching the declared schema.
   </Step>
   <Step title="Linked the sessions">
-    The assessor session declared `parent_trace_id` and `handoff_context`, creating a typed boundary between the two agents.
+    The security-review session declared `parent_trace_id` and `handoff_context`, creating a typed boundary between the two agents.
   </Step>
   <Step title="Enforced the handoff contract">
-    `assert_handoff_matches` verified the data shape, `assert_handoff_received` confirmed the parent link, and `assert_context_preserved` checked that `release_version` survived the hop.
+    `assert_handoff_matches` verified the data shape, `assert_handoff_received` confirmed the parent link, and `assert_context_preserved` checked that `vendor_name` survived the hop.
   </Step>
 </Steps>
 
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Choose an Adapter" icon="plug" href="/adapters/overview">
-    Move from manual logging to OpenAI, Anthropic, LangChain, LangGraph, or CrewAI auto-capture.
-  </Card>
   <Card title="Core Concepts" icon="book" href="/concepts/sessions-and-traces">
     Understand sessions, traces, and the recording model.
   </Card>
@@ -107,7 +148,7 @@ uv run pytest test_release_pipeline.py -v
   <Card title="Framework Adapters" icon="plug" href="/adapters/openai">
     Auto-capture traces from OpenAI, Anthropic, LangChain, and more.
   </Card>
-  <Card title="Release Gatekeeper Example" icon="shield-check" href="/examples/release-gatekeeper">
-    See a full three-agent pipeline with contract testing end-to-end.
+  <Card title="Vendor Onboarding Example" icon="shield-check" href="/examples/vendor-onboarding">
+    See a full multi-agent approval workflow with contract testing end-to-end.
   </Card>
 </CardGroup>

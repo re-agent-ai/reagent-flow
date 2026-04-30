@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "name": "reagent-flow",
-  "theme": "quill",
+  "theme": "sequoia",
   "colors": {
     "primary": "#6366F1",
     "light": "#818CF8",
@@ -14,29 +14,21 @@
         "tab": "Documentation",
         "groups": [
           {
-            "group": "Start Here",
+            "group": "Getting Started",
             "pages": [
               "introduction",
-              "installation",
-              "quickstart",
-              "examples/release-gatekeeper"
+              "quickstart"
             ]
           },
           {
-            "group": "Core Guides",
+            "group": "Core Concepts",
             "pages": [
               "concepts/sessions-and-traces",
-              "concepts/contract-testing",
-              "adapters/overview",
-              "adapters/openai",
-              "adapters/anthropic",
-              "adapters/langchain",
-              "adapters/langgraph",
-              "adapters/crewai"
+              "concepts/contract-testing"
             ]
           },
           {
-            "group": "Assertions Reference",
+            "group": "Assertions",
             "pages": [
               "assertions/handoff-contracts",
               "assertions/tool-output-contracts",
@@ -46,12 +38,28 @@
             ]
           },
           {
+            "group": "Framework Adapters",
+            "pages": [
+              "adapters/openai",
+              "adapters/anthropic",
+              "adapters/langchain",
+              "adapters/langgraph",
+              "adapters/crewai"
+            ]
+          },
+          {
             "group": "Advanced",
             "pages": [
               "advanced/nested-schemas",
               "advanced/pytest-plugin",
               "advanced/async-support",
               "advanced/agent-stack-traces"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/vendor-onboarding"
             ]
           }
         ]

@@ -224,7 +224,7 @@ def test_patch_captures_tool_result_from_followup_messages() -> None:
 
 def test_patch_tool_result_assert_tool_output_matches() -> None:
     """The captured tool result satisfies assert_tool_output_matches."""
-    tool_block = _make_tool_use_block("get_release_info", {"version": "v2.3.1"}, "toolu_r1")
+    tool_block = _make_tool_use_block("extract_vendor_packet", {"request_id": "VR-42"}, "toolu_r1")
     client = MagicMock()
     client.messages.create.side_effect = [
         _make_response(tool_blocks=[tool_block]),
@@ -244,7 +244,9 @@ def test_patch_tool_result_assert_tool_output_matches() -> None:
                         {
                             "type": "tool_result",
                             "tool_use_id": "toolu_r1",
-                            "content": '{"release_version": "v2.3.1", "open_p0": 1}',
+                            "content": (
+                                '{"vendor_name": "ClearVoice AI", "contains_customer_pii": true}'
+                            ),
                         }
                     ],
                 }
@@ -252,8 +254,8 @@ def test_patch_tool_result_assert_tool_output_matches() -> None:
         )
 
     s.assert_tool_output_matches(
-        "get_release_info",
-        schema={"release_version": str, "open_p0": int},
+        "extract_vendor_packet",
+        schema={"vendor_name": str, "contains_customer_pii": bool},
     )
 
 

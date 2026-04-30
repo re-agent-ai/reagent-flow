@@ -9,24 +9,30 @@ description: "Contract testing for multi-agent handoffs. pytest-native assertion
 
 ## The problem
 
-Multi-agent systems fail at the seams. One agent hands structured data to the next, and the second agent keeps running even when the shape is subtly wrong — a renamed field, a missing key, a string where an `int` was expected. The LLM papers over it, the tests pass, and the bug surfaces in production as an incoherent decision nobody can trace.
+Multi-agent systems fail at the seams. One agent hands structured data to the next, and the second agent keeps running even when the shape is subtly wrong — a renamed field, a missing key, a string where a list was expected. The LLM papers over it, the tests pass, and the bug surfaces in production as a confident but wrong decision.
 
 ## The solution
 
 **reagent-flow** treats every handoff as a contract and every tool call as a typed boundary. You declare the schema you expect; reagent-flow records what actually flowed and fails the test when they diverge — with an **Agent Stack Trace** pinpointing the exact field that drifted.
 
 ```python
-# Assessor receives a handoff from the gatherer. This is the contract:
-assessor_session.assert_handoff_matches(schema={
-    "release_version": str,
-    "ci": {"pipeline": str, "coverage": float},
-    "issues": {"open_p0": int, "open_p1": int},
+# Security review receives a handoff from the intake agent.
+security_session.assert_handoff_matches(schema={
+    "vendor_name": str,
+    "data_access": {
+        "contains_customer_pii": bool,
+        "data_categories": [str],
+    },
+    "compliance": {
+        "subprocessors": [str],
+        "dpa_required": bool,
+    },
 })
 ```
 
-If the upstream agent renames `open_p0` to `p0_count`, this assertion fails at PR time, not in prod.
+If the upstream agent renames `contains_customer_pii` to `handles_personal_data`, this assertion fails at PR time, not after a risky vendor gets the wrong review.
 
-## What it gives you
+## What you get
 
 <CardGroup cols={2}>
   <Card title="Handoff contracts" icon="handshake">
@@ -49,23 +55,20 @@ If the upstream agent renames `open_p0` to `p0_count`, this assertion fails at P
   </Card>
 </CardGroup>
 
-## Start here
+## Key concepts
 
-<CardGroup cols={3}>
-  <Card title="Install" icon="download" href="/installation">
-    Install the core package and the adapter that fits your stack.
-  </Card>
-  <Card title="Quickstart" icon="rocket" href="/quickstart">
-    Write your first contract test with manual instrumentation.
-  </Card>
-  <Card title="Release Gatekeeper" icon="shield-check" href="/examples/release-gatekeeper">
-    See the flagship multi-agent broken-handoff demo.
-  </Card>
-</CardGroup>
+| Concept | Description |
+|---------|-------------|
+| **Session** | A context manager that records tool calls for one agent run; may declare a `parent_trace_id` and `handoff_context` to form a link in a multi-agent chain |
+| **Handoff context** | The structured payload passed from one agent session to the next — the target of contract assertions |
+| **Trace** | The full sequence of turns captured during a session |
+| **Contract** | A declared schema (`{field: type}`) validated against a handoff or tool result |
+| **Golden baseline** | A saved trace used as the expected behavior for future runs |
+| **Agent Stack Trace** | A readable dump of every turn, attached to assertion failures |
 
 ## Framework support
 
-reagent-flow has a **zero-dependency core** plus thin adapters for:
+reagent-flow has a **zero-dependency core** with thin adapters for the major agent frameworks:
 
 - OpenAI
 - Anthropic
@@ -73,4 +76,6 @@ reagent-flow has a **zero-dependency core** plus thin adapters for:
 - LangGraph
 - CrewAI
 
-For implementation details, see [Framework Adapters](/adapters/overview).
+<Card title="Get started" icon="rocket" href="/quickstart">
+  Install reagent-flow and write your first contract test in under 5 minutes.
+</Card>

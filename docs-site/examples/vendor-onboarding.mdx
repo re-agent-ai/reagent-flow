@@ -1,0 +1,104 @@
+---
+title: "Vendor Onboarding Showcase"
+description: "A multi-agent approval workflow where reagent-flow blocks a broken handoff before a risky vendor is approved."
+---
+
+## Overview
+
+The Vendor Onboarding Showcase is the public-facing reagent-flow demo. Multiple cooperating agents evaluate whether a new vendor is safe to approve:
+
+```text
+         extract_vendor_packet          assess_security_risk
+User -> Intake agent --------[handoff]--> Security review agent
+                 \                               |
+                  \------[shared packet]--> Finance review agent
+                                                   |
+                                               Approval agent
+```
+
+The scenario is ClearVoice AI, a tool that transcribes customer calls. The intake agent is supposed to hand a structured vendor packet to the downstream reviewers.
+
+## The two scenarios
+
+### Scenario 1 — Clean packet
+
+The intake agent emits the expected packet. Security sees that the vendor handles customer PII, finance sees the right billing context, and the approval flow escalates for review.
+
+Core contract checks:
+
+```python
+intake.assert_tool_output_matches("extract_vendor_packet", schema=VENDOR_PACKET_SCHEMA)
+security.assert_handoff_received(intake)
+security.assert_handoff_matches(schema=VENDOR_PACKET_SCHEMA)
+security.assert_context_preserved({"vendor_name": "ClearVoice AI"}, fields=["vendor_name"])
+```
+
+### Scenario 2 — Broken handoff caught
+
+The intake payload drifts in two ways:
+
+- `data_access.contains_customer_pii` becomes `handles_personal_data`
+- `compliance.subprocessors` changes from `list[str]` to a comma-separated string
+
+Without a contract, the downstream workflow can keep going on incomplete data and produce the wrong approval path. reagent-flow fails the handoff at the next boundary:
+
+```text
+handoff field 'data_access.contains_customer_pii': missing from data
+```
+
+That is the core product story: the PR fails before a risky vendor approval ships.
+
+## Schema
+
+```python
+VENDOR_PACKET_SCHEMA = {
+    "vendor_name": str,
+    "data_access": {
+        "contains_customer_pii": bool,
+        "data_categories": [str],
+        "storage_region": str,
+        "retention_days": int,
+    },
+    "compliance": {
+        "soc2_available": bool,
+        "dpa_required": bool,
+        "subprocessors": [str],
+    },
+}
+```
+
+## What reagent-flow catches
+
+| Check | API | What it catches |
+|-------|-----|-----------------|
+| Tool output shape | `assert_tool_output_matches` | Drift in the packet emitted by the intake tool |
+| Handoff schema | `assert_handoff_matches` | Renamed, missing, or wrongly-typed fields at the security boundary |
+| Parent linkage | `assert_handoff_received` | A child session that is not linked to the intake session |
+| Value preservation | `assert_context_preserved` | A key value like `vendor_name` getting lost between hops |
+
+## Running the showcase
+
+```bash
+cd examples/vendor_onboarding_showcase
+uv run python showcase.py
+```
+
+Expected punchline:
+
+```text
+ASSERTION FAILED: handoff field 'data_access.contains_customer_pii': missing from data
+Result: vendor approval blocked before a risky security review reaches the approver.
+```
+
+## Running the tests
+
+```bash
+cd examples/vendor_onboarding_showcase
+uv run pytest test_showcase.py -v
+```
+
+The example also includes `vendor_onboarding_showcase.excalidraw` for posts, screenshots, and decks.
+
+<Card title="View source" icon="github" href="https://github.com/re-agent-ai/reagent-flow/tree/master/examples/vendor_onboarding_showcase">
+  Browse the full showcase source code on GitHub.
+</Card>

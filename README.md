@@ -1,23 +1,36 @@
 # reagent-flow
 
-**Contract testing for multi-agent handoffs.** pytest-native assertions that catch schema drift, broken handoffs, and tool-output regressions *before* they ship.
+**Contract testing for multi-agent handoffs.** pytest-native assertions that catch schema drift, broken handoffs, and tool-output regressions _before_ they ship.
+
+```bash
+uv add reagent-flow
+cd examples/vendor_onboarding_showcase
+uv run python showcase.py
+```
 
 ## Why reagent-flow?
 
-Multi-agent systems fail at the seams. One agent hands structured data to the next, and the second agent keeps running even when the shape is subtly wrong — a renamed field, a missing key, a string where an `int` was expected. The LLM papers over it, the tests pass, and the bug surfaces in production as an incoherent decision nobody can trace.
+Multi-agent systems fail at the seams. One agent hands structured data to the next, and the second agent keeps going even when the shape is subtly wrong — a renamed field, a missing key, a string where a list was expected. The LLM papers over it, the tests pass, and the bug shows up later as a confident but wrong decision.
 
 **reagent-flow** treats every handoff as a contract and every tool call as a typed boundary. You declare the schema you expect; reagent-flow records what actually flowed and fails the test when they diverge — with an **Agent Stack Trace** pinpointing the exact field that drifted.
 
+Structured outputs keep one LLM call honest. Runtime guardrails keep one response safe. reagent-flow tests whether the boundary between two agent sessions still holds in CI.
+
 ```python
-# Assessor receives a handoff from the gatherer. This is the contract:
-assessor_session.assert_handoff_matches(schema={
-    "release_version": str,
-    "ci": {"pipeline": str, "coverage": float},
-    "issues": {"open_p0": int, "open_p1": int},
+# Security receives a handoff from the intake agent. This is the contract:
+security_session.assert_handoff_matches(schema={
+    "vendor_name": str,
+    "data_access": {
+        "contains_customer_pii": bool,
+        "data_categories": [str],
+    },
+    "compliance": {"subprocessors": [str]},
 })
 ```
 
-If the upstream agent renames `open_p0` → `p0_count`, this assertion fails at PR time, not in prod.
+If the upstream agent renames `contains_customer_pii` or changes
+`subprocessors` from a list to a string, this assertion fails at PR time, not
+after an AI approval workflow clears a risky vendor.
 
 ### What you get
 
@@ -29,16 +42,35 @@ If the upstream agent renames `open_p0` → `p0_count`, this assertion fails at 
 - **Agent Stack Traces** — every failed assertion attaches a readable dump of the full tool-calling history.
 - **Zero-dependency core** with thin adapters for OpenAI, Anthropic, LangChain, LangGraph, and CrewAI.
 
-## Key Concepts
+## Product Showcase
 
-| Concept | Description |
-|---------|-------------|
-| **Session** | A context manager that records tool calls for one agent run; may declare a `parent_trace_id` and `handoff_context` to form a link in a multi-agent chain |
-| **Handoff context** | The structured payload passed from one agent session to the next — the target of contract assertions |
-| **Trace** | The full sequence of turns captured during a session |
-| **Contract** | A declared schema (`{field: type}`) validated against a handoff or tool result |
-| **Golden baseline** | A saved trace used as the expected behavior for future runs |
-| **Agent Stack Trace** | A readable dump of every turn, attached to assertion failures |
+The clearest walkthrough is the deterministic vendor-onboarding showcase. No API key is required.
+
+```bash
+cd examples/vendor_onboarding_showcase
+uv run python showcase.py
+```
+
+It shows a realistic AI approval workflow:
+
+```text
+Intake Agent -> Security Review Agent
+             -> Finance Review Agent
+             -> Approval Agent
+```
+
+The intake agent drifts a vendor packet for a customer-call transcription tool:
+`data_access.contains_customer_pii` is renamed and `compliance.subprocessors`
+changes from a list to a string. The security agent would mark the vendor LOW
+risk and the approval agent would approve it, but reagent-flow fails the
+handoff contract first:
+
+```text
+ASSERTION FAILED: handoff field 'data_access.contains_customer_pii': missing from data
+```
+
+See [examples/vendor_onboarding_showcase](examples/vendor_onboarding_showcase/)
+for the deterministic no-API-key demo, tests, and Excalidraw diagram.
 
 ## Installation
 
@@ -58,62 +90,85 @@ uv add reagent-flow-langgraph   # LangGraph
 uv add reagent-flow-crewai      # CrewAI
 ```
 
+## Key Concepts
+
+| Concept               | Description                                                                                                                                              |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session**           | A context manager that records tool calls for one agent run; may declare a `parent_trace_id` and `handoff_context` to form a link in a multi-agent chain |
+| **Handoff context**   | The structured payload passed from one agent session to the next — the target of contract assertions                                                     |
+| **Trace**             | The full sequence of turns captured during a session                                                                                                     |
+| **Contract**          | A declared schema (`{field: type}`) validated against a handoff or tool result                                                                           |
+| **Golden baseline**   | A saved trace used as the expected behavior for future runs                                                                                              |
+| **Agent Stack Trace** | A readable dump of every turn, attached to assertion failures                                                                                            |
+
 ## Quick Start
 
-Contract-test a two-agent handoff: the **gatherer** pulls release data, the **assessor** consumes it. reagent-flow validates the shape of what flows between them.
+Contract-test a two-agent handoff: the **intake agent** extracts a vendor
+packet, and the **security agent** consumes it. reagent-flow validates the
+shape of what flows between them.
 
 ```python
 import reagent_flow
 
 
-def test_release_pipeline(tmp_path):
+def test_vendor_onboarding(tmp_path):
     trace_dir = str(tmp_path)
 
-    # Phase 1 — gatherer agent records release info
-    with reagent_flow.session("gatherer", trace_dir=trace_dir) as gather:
-        gather.log_llm_call(
-            tool_calls=[{"name": "get_release_info", "arguments": {"version": "v2.3.1"}}],
+    vendor_packet = {
+        "vendor_name": "ClearVoice AI",
+        "data_access": {
+            "contains_customer_pii": True,
+            "data_categories": ["call_recordings", "email_addresses"],
+        },
+        "compliance": {"subprocessors": ["AcmeCloud", "VectorStore Inc"]},
+    }
+
+    # Phase 1 — intake agent records the vendor packet
+    with reagent_flow.session("vendor-intake", trace_dir=trace_dir) as intake:
+        intake.log_llm_call(
+            tool_calls=[{"name": "extract_vendor_packet", "arguments": {"request_id": "VR-42"}}],
         )
-        gather.log_tool_result(
-            "get_release_info",
-            result={
-                "release_version": "v2.3.1",
-                "ci": {"pipeline": "passed", "coverage": 87.3},
-                "issues": {"open_p0": 1, "open_p1": 3},
-            },
-        )
+        intake.log_tool_result("extract_vendor_packet", result=vendor_packet)
 
     # Contract on the tool output
-    gather.assert_tool_output_matches("get_release_info", schema={
-        "release_version": str,
-        "ci": {"pipeline": str, "coverage": float},
-        "issues": {"open_p0": int, "open_p1": int},
+    intake.assert_tool_output_matches("extract_vendor_packet", schema={
+        "vendor_name": str,
+        "data_access": {
+            "contains_customer_pii": bool,
+            "data_categories": [str],
+        },
+        "compliance": {"subprocessors": [str]},
     })
 
-    # Phase 2 — assessor receives the gatherer's output as a handoff
-    release_info = gather.trace.turns[0].tool_results[0].result
+    # Phase 2 — security receives the intake output as a handoff
     with reagent_flow.session(
-        "assessor",
+        "vendor-security-review",
         trace_dir=trace_dir,
-        parent_trace_id=gather.trace.trace_id,
-        handoff_context=release_info,
-    ) as assess:
-        assess.log_llm_call(
-            tool_calls=[{"name": "assess_risk", "arguments": {"risk_level": "HIGH"}}],
+        parent_trace_id=intake.trace.trace_id,
+        handoff_context=vendor_packet,
+    ) as security:
+        security.log_llm_call(
+            tool_calls=[{"name": "review_security", "arguments": {"vendor": "ClearVoice AI"}}],
         )
-        assess.log_tool_result("assess_risk", result={"risk_level": "HIGH"})
+        security.log_tool_result("review_security", result={"security_risk": "HIGH"})
 
     # Contract on the handoff itself — this is where multi-agent systems break
-    assess.assert_handoff_received(gather)
-    assess.assert_handoff_matches(schema={
-        "release_version": str,
-        "ci": {"pipeline": str, "coverage": float},
-        "issues": {"open_p0": int, "open_p1": int},
+    security.assert_handoff_received(intake)
+    security.assert_handoff_matches(schema={
+        "vendor_name": str,
+        "data_access": {
+            "contains_customer_pii": bool,
+            "data_categories": [str],
+        },
+        "compliance": {"subprocessors": [str]},
     })
-    assess.assert_context_preserved({"release_version": "v2.3.1"}, fields=["release_version"])
+    security.assert_context_preserved({"vendor_name": "ClearVoice AI"}, fields=["vendor_name"])
 ```
 
-If an upstream change renames `open_p0` → `p0_count`, `assert_handoff_matches` fails with the exact path (`handoff field 'issues.open_p0': missing from data`) attached to an Agent Stack Trace. See the full runnable demo in [examples/langgraph_demo](examples/langgraph_demo/).
+If an upstream change renames `contains_customer_pii`,
+`assert_handoff_matches` fails with the exact path
+(`handoff field 'data_access.contains_customer_pii': missing from data`)
+attached to an Agent Stack Trace.
 
 ### Async Support
 
@@ -129,26 +184,26 @@ async def test_async_agent():
 
 ## Assertions
 
-| Method | Description |
-|--------|-------------|
-| `assert_called(tool)` | Tool was called at least once |
-| `assert_never_called(tool)` | Tool was never called |
-| `assert_called_before(a, b)` | Tool `a` was called before tool `b` (positional) |
-| `assert_tool_succeeded(tool)` | Tool was called and all executions succeeded |
-| `assert_max_turns(n)` | Trace has at most `n` turns |
-| `assert_total_duration_under(ms=N)` | Total trace duration under `N` ms |
-| `assert_matches_baseline()` | Trace matches its golden baseline |
-| `assert_flow(pattern)` | Tool calls match a flow pattern (see below) |
-| `assert_called_times(tool, min=, max=)` | Tool was called between `min` and `max` times |
-| `assert_called_with(tool, **args)` | Tool was called with specific argument values |
-| `assert_handoff_received(parent)` | Session is linked to a parent session |
-| `assert_handoff_has_fields(fields)` | Required fields exist in handoff context |
-| `assert_total_tokens_under(n)` | Total token usage across all turns is under `n` |
-| `assert_cost_under(usd=, model_costs=)` | Estimated cost is under a USD limit |
-| `assert_handoff_matches(schema=)` | Handoff context matches a `{field: type}` schema |
-| `assert_no_extra_fields(allowed=)` | Handoff context has no unexpected fields |
-| `assert_tool_output_matches(tool, schema=)` | Tool results match a `{field: type}` schema |
-| `assert_context_preserved(source, fields=)` | Specific values survived a handoff unchanged |
+| Method                                      | Description                                      |
+| ------------------------------------------- | ------------------------------------------------ |
+| `assert_called(tool)`                       | Tool was called at least once                    |
+| `assert_never_called(tool)`                 | Tool was never called                            |
+| `assert_called_before(a, b)`                | Tool `a` was called before tool `b` (positional) |
+| `assert_tool_succeeded(tool)`               | Tool was called and all executions succeeded     |
+| `assert_max_turns(n)`                       | Trace has at most `n` turns                      |
+| `assert_total_duration_under(ms=N)`         | Total trace duration under `N` ms                |
+| `assert_matches_baseline()`                 | Trace matches its golden baseline                |
+| `assert_flow(pattern)`                      | Tool calls match a flow pattern (see below)      |
+| `assert_called_times(tool, min=, max=)`     | Tool was called between `min` and `max` times    |
+| `assert_called_with(tool, **args)`          | Tool was called with specific argument values    |
+| `assert_handoff_received(parent)`           | Session is linked to a parent session            |
+| `assert_handoff_has_fields(fields)`         | Required fields exist in handoff context         |
+| `assert_total_tokens_under(n)`              | Total token usage across all turns is under `n`  |
+| `assert_cost_under(usd=, model_costs=)`     | Estimated cost is under a USD limit              |
+| `assert_handoff_matches(schema=)`           | Handoff context matches a `{field: type}` schema |
+| `assert_no_extra_fields(allowed=)`          | Handoff context has no unexpected fields         |
+| `assert_tool_output_matches(tool, schema=)` | Tool results match a `{field: type}` schema      |
+| `assert_context_preserved(source, fields=)` | Specific values survived a handoff unchanged     |
 
 ## Golden Baselines
 
@@ -258,6 +313,7 @@ s.assert_tool_output_matches("search", schema={
 ```
 
 Error messages include dot/bracket path notation:
+
 - `"handoff field 'user.name': expected str, got int"`
 - `"handoff field 'tags[2]': expected str, got int"`
 - `"handoff field 'results[0].score': expected float, got str"`
@@ -329,12 +385,12 @@ pytest --reagent-dir=.reagent  # Override trace directory (default: .reagent)
 
 ### Fixtures
 
-| Fixture | Type | Description |
-|---------|------|-------------|
+| Fixture           | Type      | Description                                                                                                   |
+| ----------------- | --------- | ------------------------------------------------------------------------------------------------------------- |
 | `reagent_session` | `Session` | A managed session that reads all CLI flags, applies the `@pytest.mark.reagent` marker, and auto-saves on exit |
-| `reagent_dir` | `str` | The `--reagent-dir` value |
-| `reagent_record` | `bool` | Whether `--reagent-record` was passed |
-| `reagent_update` | `bool` | Whether `--reagent-update` was passed |
+| `reagent_dir`     | `str`     | The `--reagent-dir` value                                                                                     |
+| `reagent_record`  | `bool`    | Whether `--reagent-record` was passed                                                                         |
+| `reagent_update`  | `bool`    | Whether `--reagent-update` was passed                                                                         |
 
 ### Examples
 
@@ -482,6 +538,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 Traces are saved as plain JSON files containing the full tool call arguments and results from your agent runs. **This may include sensitive data** such as API keys, user PII, database contents, or any other values your tools handle.
 
 Before committing traces to version control or sharing them:
+
 - Review trace files for sensitive content
 - Add `.reagent/` to your `.gitignore` (golden baselines may be an exception if they contain only synthetic data)
 - Consider sanitizing tool inputs/outputs before logging if your agent handles real user data

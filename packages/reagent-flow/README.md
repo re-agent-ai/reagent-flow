@@ -9,15 +9,20 @@ Multi-agent systems fail at the seams. One agent hands structured data to the ne
 **reagent-flow** treats every handoff as a contract and every tool call as a typed boundary. You declare the schema you expect; reagent-flow records what actually flowed and fails the test when they diverge — with an **Agent Stack Trace** pinpointing the exact field that drifted.
 
 ```python
-# Assessor receives a handoff from the gatherer. This is the contract:
-assessor_session.assert_handoff_matches(schema={
-    "release_version": str,
-    "ci": {"pipeline": str, "coverage": float},
-    "issues": {"open_p0": int, "open_p1": int},
+# Security receives a handoff from the intake agent. This is the contract:
+security_session.assert_handoff_matches(schema={
+    "vendor_name": str,
+    "data_access": {
+        "contains_customer_pii": bool,
+        "data_categories": [str],
+    },
+    "compliance": {"subprocessors": [str]},
 })
 ```
 
-If the upstream agent renames `open_p0` → `p0_count`, this assertion fails at PR time, not in prod.
+If the upstream agent renames `contains_customer_pii` or changes
+`subprocessors` from a list to a string, this assertion fails at PR time, not
+after an AI approval workflow clears a risky vendor.
 
 ### What you get
 
@@ -60,60 +65,72 @@ uv add reagent-flow-crewai      # CrewAI
 
 ## Quick Start
 
-Contract-test a two-agent handoff: the **gatherer** pulls release data, the **assessor** consumes it. reagent-flow validates the shape of what flows between them.
+Contract-test a two-agent handoff: the **intake agent** extracts a vendor
+packet, and the **security agent** consumes it. reagent-flow validates the
+shape of what flows between them.
 
 ```python
 import reagent_flow
 
 
-def test_release_pipeline(tmp_path):
+def test_vendor_onboarding(tmp_path):
     trace_dir = str(tmp_path)
 
-    # Phase 1 — gatherer agent records release info
-    with reagent_flow.session("gatherer", trace_dir=trace_dir) as gather:
-        gather.log_llm_call(
-            tool_calls=[{"name": "get_release_info", "arguments": {"version": "v2.3.1"}}],
+    vendor_packet = {
+        "vendor_name": "ClearVoice AI",
+        "data_access": {
+            "contains_customer_pii": True,
+            "data_categories": ["call_recordings", "email_addresses"],
+        },
+        "compliance": {"subprocessors": ["AcmeCloud", "VectorStore Inc"]},
+    }
+
+    # Phase 1 — intake agent records the vendor packet
+    with reagent_flow.session("vendor-intake", trace_dir=trace_dir) as intake:
+        intake.log_llm_call(
+            tool_calls=[{"name": "extract_vendor_packet", "arguments": {"request_id": "VR-42"}}],
         )
-        gather.log_tool_result(
-            "get_release_info",
-            result={
-                "release_version": "v2.3.1",
-                "ci": {"pipeline": "passed", "coverage": 87.3},
-                "issues": {"open_p0": 1, "open_p1": 3},
-            },
-        )
+        intake.log_tool_result("extract_vendor_packet", result=vendor_packet)
 
     # Contract on the tool output
-    gather.assert_tool_output_matches("get_release_info", schema={
-        "release_version": str,
-        "ci": {"pipeline": str, "coverage": float},
-        "issues": {"open_p0": int, "open_p1": int},
+    intake.assert_tool_output_matches("extract_vendor_packet", schema={
+        "vendor_name": str,
+        "data_access": {
+            "contains_customer_pii": bool,
+            "data_categories": [str],
+        },
+        "compliance": {"subprocessors": [str]},
     })
 
-    # Phase 2 — assessor receives the gatherer's output as a handoff
-    release_info = gather.trace.turns[0].tool_results[0].result
+    # Phase 2 — security receives the intake output as a handoff
     with reagent_flow.session(
-        "assessor",
+        "vendor-security-review",
         trace_dir=trace_dir,
-        parent_trace_id=gather.trace.trace_id,
-        handoff_context=release_info,
-    ) as assess:
-        assess.log_llm_call(
-            tool_calls=[{"name": "assess_risk", "arguments": {"risk_level": "HIGH"}}],
+        parent_trace_id=intake.trace.trace_id,
+        handoff_context=vendor_packet,
+    ) as security:
+        security.log_llm_call(
+            tool_calls=[{"name": "review_security", "arguments": {"vendor": "ClearVoice AI"}}],
         )
-        assess.log_tool_result("assess_risk", result={"risk_level": "HIGH"})
+        security.log_tool_result("review_security", result={"security_risk": "HIGH"})
 
     # Contract on the handoff itself — this is where multi-agent systems break
-    assess.assert_handoff_received(gather)
-    assess.assert_handoff_matches(schema={
-        "release_version": str,
-        "ci": {"pipeline": str, "coverage": float},
-        "issues": {"open_p0": int, "open_p1": int},
+    security.assert_handoff_received(intake)
+    security.assert_handoff_matches(schema={
+        "vendor_name": str,
+        "data_access": {
+            "contains_customer_pii": bool,
+            "data_categories": [str],
+        },
+        "compliance": {"subprocessors": [str]},
     })
-    assess.assert_context_preserved({"release_version": "v2.3.1"}, fields=["release_version"])
+    security.assert_context_preserved({"vendor_name": "ClearVoice AI"}, fields=["vendor_name"])
 ```
 
-If an upstream change renames `open_p0` → `p0_count`, `assert_handoff_matches` fails with the exact path (`handoff field 'issues.open_p0': missing from data`) attached to an Agent Stack Trace. See the full runnable demo in the repository's `examples/langgraph_demo/` directory.
+If an upstream change renames `contains_customer_pii`,
+`assert_handoff_matches` fails with the exact path
+(`handoff field 'data_access.contains_customer_pii': missing from data`)
+attached to an Agent Stack Trace.
 
 ### Async Support
 
