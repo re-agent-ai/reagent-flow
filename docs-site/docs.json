@@ -4,8 +4,8 @@
   "theme": "sequoia",
   "colors": {
     "primary": "#2E46FF",
-    "light": "#818CF8",
-    "dark": "#4F46E5"
+    "light": "#2E46FF",
+    "dark": "#2E46FF"
   },
   "navigation": {
     "groups": [
@@ -73,7 +73,7 @@
     "thumbsRating": true
   },
   "search": {
-    "prompt": "Search reagent-flow docs..."
+    "prompt": "Search docs"
   },
   "seo": {
     "indexHiddenPages": false
