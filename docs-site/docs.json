@@ -3,9 +3,9 @@
   "name": "reagent-flow",
   "theme": "sequoia",
   "colors": {
-    "primary": "#2E46FF",
-    "light": "#2E46FF",
-    "dark": "#2E46FF"
+    "primary": "#060D0B",
+    "light": "#04342C",
+    "dark": "#9FE1CB"
   },
   "navigation": {
     "groups": [
