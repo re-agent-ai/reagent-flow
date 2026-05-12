@@ -136,6 +136,23 @@ uv run pytest test_vendor_onboarding.py -v
   </Step>
 </Steps>
 
+## Trace privacy
+
+reagent-flow stores traces locally in the configured `trace_dir`. Traces can include tool arguments, tool outputs, handoff payloads, and model responses.
+
+Use a temporary `trace_dir` in tests, keep `.reagent/` out of git, and avoid logging raw secrets or full customer payloads. For fields that should never be written to trace files, pass `redact_fields`:
+
+```python
+with reagent_flow.session(
+    "vendor-security-review",
+    trace_dir=".reagent",
+    redact_fields={"api_key", "customer_email"},
+) as s:
+    ...
+```
+
+Redaction only affects the saved `.trace.json` file. In-memory assertions still validate the original values.
+
 ## Next steps
 
 <CardGroup cols={2}>
@@ -150,5 +167,11 @@ uv run pytest test_vendor_onboarding.py -v
   </Card>
   <Card title="Vendor Onboarding Example" icon="shield-check" href="/examples/vendor-onboarding">
     See a full multi-agent approval workflow with contract testing end-to-end.
+  </Card>
+  <Card title="Run in CI" icon="github" href="/advanced/ci">
+    Add reagent-flow contract tests to GitHub Actions.
+  </Card>
+  <Card title="Why Contract Testing?" icon="circle-help" href="/concepts/why-contract-testing">
+    Understand how reagent-flow differs from guardrails, structured outputs, and evals.
   </Card>
 </CardGroup>

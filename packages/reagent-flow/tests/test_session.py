@@ -1,11 +1,13 @@
 """Tests for reagent_flow session and recorder."""
 
+import json
 import warnings
 
 import pytest
 import reagent_flow
 from reagent_flow._context import get_active_session
 from reagent_flow.exceptions import AmbiguousToolCallError, ReagentWarning, SessionClosedError
+from reagent_flow.storage.json import find_traces
 
 
 def test_session_sets_contextvar() -> None:
@@ -232,6 +234,32 @@ def test_session_assert_context_preserved() -> None:
         s.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
         s.log_tool_result("search", result="ok")
     s.assert_context_preserved(source, fields=["user_id", "query"])
+
+
+def test_session_redacts_saved_trace_without_mutating_live_trace(tmp_path: object) -> None:
+    """redact_fields only affects persisted trace JSON."""
+    with reagent_flow.session(
+        "privacy",
+        trace_dir=str(tmp_path),
+        handoff_context={"api_key": "secret", "query": "revenue"},
+        redact_fields={"api_key"},
+    ) as s:
+        ids = s.log_llm_call(tool_calls=[{"name": "lookup", "arguments": {"api_key": "secret"}}])
+        s.log_tool_result("lookup", call_id=ids[0], result={"api_key": "secret", "ok": True})
+
+    assert s.trace.handoff_context == {"api_key": "secret", "query": "revenue"}
+    assert s.trace.turns[0].llm_call.tool_calls[0].arguments == {"api_key": "secret"}
+    assert s.trace.turns[0].tool_results[0].result == {"api_key": "secret", "ok": True}
+
+    files = find_traces(str(tmp_path), "privacy")
+    with open(files[0]) as f:
+        data = json.load(f)
+    assert data["handoff_context"] == {"api_key": "[REDACTED]", "query": "revenue"}
+    assert data["turns"][0]["llm_call"]["tool_calls"][0]["arguments"] == {"api_key": "[REDACTED]"}
+    assert data["turns"][0]["tool_results"][0]["result"] == {
+        "api_key": "[REDACTED]",
+        "ok": True,
+    }
 
 
 @pytest.mark.asyncio

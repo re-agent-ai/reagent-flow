@@ -1,4 +1,4 @@
-"""reagent-flow: Behavioral testing library for AI agent tool-calling loops."""
+"""reagent-flow: CI contract testing for multi-agent handoffs."""
 
 from typing import Any
 
@@ -38,6 +38,7 @@ def session(
     trace_dir: str = ".reagent",
     parent_trace_id: str | None = None,
     handoff_context: dict[str, Any] | None = None,
+    redact_fields: set[str] | None = None,
 ) -> Session:
     """Create a new recording session."""
     return Session(
@@ -47,4 +48,5 @@ def session(
         trace_dir=trace_dir,
         parent_trace_id=parent_trace_id,
         handoff_context=handoff_context,
+        redact_fields=redact_fields,
     )

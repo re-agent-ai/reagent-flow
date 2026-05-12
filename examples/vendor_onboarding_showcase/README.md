@@ -55,3 +55,21 @@ The tests prove both sides of the story:
 - Clean packet: contracts pass, PII is visible, approval escalates.
 - Drifted packet: PII is hidden, the workflow would approve, but reagent-flow
   fails the handoff contract first.
+
+## Show the failure
+
+```bash
+cd examples/vendor_onboarding_showcase
+uv run pytest ci_failure_demo.py -v
+```
+
+This leaves the broken handoff assertion uncaught, so pytest shows the same
+failure a CI job would show:
+
+```text
+FAILED ci_failure_demo.py::test_drifted_intake_handoff_fails_ci
+ASSERTION FAILED: handoff field 'data_access.contains_customer_pii': missing from data
+```
+
+`ci_failure_demo.py` is not named `test_*.py`, so normal test runs do not
+collect it unless you pass the file explicitly.
