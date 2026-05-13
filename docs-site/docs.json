@@ -13,14 +13,16 @@
         "group": "Getting Started",
         "pages": [
           "introduction",
-          "quickstart"
+          "quickstart",
+          "installation"
         ]
       },
       {
         "group": "Core Concepts",
         "pages": [
           "concepts/sessions-and-traces",
-          "concepts/contract-testing"
+          "concepts/contract-testing",
+          "concepts/why-contract-testing"
         ]
       },
       {
@@ -49,7 +51,8 @@
           "advanced/nested-schemas",
           "advanced/pytest-plugin",
           "advanced/async-support",
-          "advanced/agent-stack-traces"
+          "advanced/agent-stack-traces",
+          "advanced/ci"
         ]
       },
       {

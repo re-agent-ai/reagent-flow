@@ -110,28 +110,28 @@ Patterns are **anchored to start and end** by default:
 
 ```python
 def test_agent_behavior(tmp_path):
-    with reagent_flow.session("risk-pipeline", trace_dir=str(tmp_path)) as s:
+    with reagent_flow.session("vendor-approval", trace_dir=str(tmp_path)) as s:
         s.log_llm_call(
-            tool_calls=[{"name": "get_release_info", "arguments": {"version": "v2.3.1"}}],
+            tool_calls=[{"name": "extract_vendor_packet", "arguments": {"vendor": "ClearVoice AI"}}],
         )
-        s.log_tool_result("get_release_info", result={"version": "v2.3.1"})
+        s.log_tool_result("extract_vendor_packet", result={"vendor_name": "ClearVoice AI"})
 
         s.log_llm_call(
-            tool_calls=[{"name": "assess_risk", "arguments": {"level": "HIGH"}}],
+            tool_calls=[{"name": "review_security", "arguments": {"vendor": "ClearVoice AI"}}],
         )
-        s.log_tool_result("assess_risk", result={"risk": "HIGH"})
+        s.log_tool_result("review_security", result={"risk": "HIGH"})
 
         s.log_llm_call(
-            tool_calls=[{"name": "make_decision", "arguments": {"decision": "BLOCK"}}],
+            tool_calls=[{"name": "record_decision", "arguments": {"decision": "ESCALATE"}}],
         )
-        s.log_tool_result("make_decision", result={"decision": "BLOCK"})
+        s.log_tool_result("record_decision", result={"decision": "ESCALATE"})
 
-    # Behavioral assertions
-    s.assert_called("assess_risk")
+    # Flow assertions
+    s.assert_called("review_security")
     s.assert_never_called("delete_data")
-    s.assert_called_before("assess_risk", "make_decision")
-    s.assert_called_times("assess_risk", min=1, max=1)
-    s.assert_called_with("make_decision", decision="BLOCK")
-    s.assert_flow(["get_release_info", "assess_risk", "make_decision"])
+    s.assert_called_before("review_security", "record_decision")
+    s.assert_called_times("review_security", min=1, max=1)
+    s.assert_called_with("record_decision", decision="ESCALATE")
+    s.assert_flow(["extract_vendor_packet", "review_security", "record_decision"])
     s.assert_max_turns(5)
 ```

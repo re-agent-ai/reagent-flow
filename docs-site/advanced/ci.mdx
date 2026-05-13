@@ -1,0 +1,82 @@
+---
+title: "CI"
+description: "Run reagent-flow contract tests in CI without live LLM calls."
+---
+
+## CI contract tests
+
+reagent-flow tests should be deterministic. Do not make live LLM API calls in CI. Build contract tests with mocks, fixtures, or manually logged sessions, then fail the PR when a handoff or tool-output contract drifts.
+
+## Minimal command
+
+```bash
+uv run pytest tests/ -v
+```
+
+If your reagent-flow tests live in a specific folder:
+
+```bash
+uv run pytest tests/agent_contracts/ -v
+```
+
+## GitHub Actions
+
+```yaml
+name: Agent contract tests
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run contract tests
+        run: uv run pytest tests/ -v
+```
+
+## Recommended release checks
+
+For a repository using reagent-flow itself, run:
+
+```bash
+uv run ruff check packages/ examples/
+uv run ruff format --check packages/ examples/
+uv run mypy packages/reagent-flow/src/reagent_flow/ --strict
+uv run coverage run -m pytest packages/
+uv run pytest examples/vendor_onboarding_showcase/test_showcase.py -v
+```
+
+## Trace files in CI
+
+Use a temporary `trace_dir` in tests unless you intentionally want trace files as artifacts. Do not upload `.trace.json` files from public CI unless they are sanitized.
+
+For sensitive keys, use `redact_fields`:
+
+```python
+with reagent_flow.session(
+    "security-review",
+    trace_dir=str(tmp_path),
+    redact_fields={"api_key", "customer_email"},
+) as s:
+    ...
+```
+
+Redaction only affects saved trace files. Assertions still validate the original in-memory values.

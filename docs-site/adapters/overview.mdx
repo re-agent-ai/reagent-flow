@@ -53,5 +53,5 @@ The assertion surface stays the same no matter how the trace was captured:
 ```python
 s.assert_called("lookup_order")
 s.assert_tool_output_matches("lookup_order", schema={"status": str})
-s.assert_handoff_matches(schema={"release_version": str})
+s.assert_handoff_matches(schema={"vendor_name": str})
 ```

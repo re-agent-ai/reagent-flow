@@ -26,7 +26,13 @@ def _sanitize_name(name: str) -> str:
     return sanitized
 
 
-def save_trace(trace: Trace, base_dir: str, *, golden: bool = False) -> str:
+def save_trace(
+    trace: Trace,
+    base_dir: str,
+    *,
+    golden: bool = False,
+    redact_fields: set[str] | None = None,
+) -> str:
     """Save a trace to JSON. Returns the file path."""
     safe_name = _sanitize_name(trace.name)
 
@@ -44,7 +50,7 @@ def save_trace(trace: Trace, base_dir: str, *, golden: bool = False) -> str:
             file_path = dir_path / f"{safe_name}_{ts}_{counter}.trace.json"
             counter += 1
 
-    data = trace_to_dict(trace)
+    data = trace_to_dict(trace, redact_fields=redact_fields)
     with open(file_path, "w") as f:
         json.dump(data, f, indent=2, default=_json_fallback)
     return str(file_path)

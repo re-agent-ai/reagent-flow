@@ -31,6 +31,7 @@ class Session:
         trace_dir: str = ".reagent",
         parent_trace_id: str | None = None,
         handoff_context: dict[str, Any] | None = None,
+        redact_fields: set[str] | None = None,
     ) -> None:
         self.trace = Trace(
             trace_id=str(uuid.uuid4()),
@@ -42,6 +43,7 @@ class Session:
         )
         self._golden = golden
         self._trace_dir = trace_dir
+        self._redact_fields = redact_fields
         self._recorder = Recorder()
         self._closed = False
         self._token: contextvars.Token[Session | None] | None = None
@@ -76,7 +78,12 @@ class Session:
         """Save trace to storage."""
         from reagent_flow.storage.json import save_trace
 
-        save_trace(self.trace, self._trace_dir, golden=self._golden)
+        save_trace(
+            self.trace,
+            self._trace_dir,
+            golden=self._golden,
+            redact_fields=self._redact_fields,
+        )
 
     def log_llm_call(self, **kwargs: Any) -> list[str]:
         """Log an LLM call. Returns list of call_ids."""
@@ -148,12 +155,16 @@ class Session:
 
         """
         from reagent_flow.diff import diff_traces
+        from reagent_flow.models import trace_from_dict, trace_to_dict
         from reagent_flow.storage.json import load_golden
 
         self._sync_trace()
         dir_path = base_dir or self._trace_dir
         golden = load_golden(dir_path, self.trace.name)
-        result = diff_traces(golden, self.trace, ignore_fields=ignore_fields)
+        actual = self.trace
+        if self._redact_fields:
+            actual = trace_from_dict(trace_to_dict(self.trace, redact_fields=self._redact_fields))
+        result = diff_traces(golden, actual, ignore_fields=ignore_fields)
         if not result.is_match:
             raise AssertionError(f"Trace does not match golden baseline:\n{result.summary()}")
 

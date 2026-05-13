@@ -59,6 +59,8 @@ uv add reagent-flow-crewai
 
 ## Verify the install
 
+Create a quick smoke test:
+
 ```python
 import reagent_flow
 
@@ -69,4 +71,10 @@ with reagent_flow.session("smoke-test") as s:
 s.assert_called("ping")
 ```
 
-If that passes, the core install is working.
+Run it with pytest:
+
+```bash
+uv run pytest test_smoke.py -v
+```
+
+If that passes, the core install is working. For CI setup, see [CI](/advanced/ci).

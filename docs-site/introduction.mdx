@@ -3,9 +3,15 @@ title: "Introduction"
 description: "Contract testing for multi-agent handoffs. pytest-native assertions that catch schema drift, broken handoffs, and tool-output regressions before they ship."
 ---
 
+# reagent-flow
+
+**CI contract testing for multi-agent handoffs.** pytest-native assertions that catch schema drift, broken handoffs, and tool-output regressions *before* they ship.
+
 ## The problem
 
-Multi-agent systems fail at the seams. One agent hands structured data to the next, and the second agent keeps running even when the shape is subtly wrong — a renamed field, a missing key, a string where a list was expected. The LLM papers over it, the tests pass, and the bug surfaces in production as a confident but wrong decision.
+Multi-agent systems fail at the seams. One agent hands structured data to the next, and the second agent keeps running even when the shape is subtly wrong: a renamed field, a missing key, or a string where a list was expected.
+
+In the vendor-onboarding showcase, the intake agent renames `data_access.contains_customer_pii` to `handles_personal_data` and changes `compliance.subprocessors` from `list[str]` to a comma-separated string. The downstream security review can still run, but it is now making a decision from incomplete data.
 
 ## The solution
 
@@ -27,6 +33,28 @@ security_session.assert_handoff_matches(schema={
 ```
 
 If the upstream agent renames `contains_customer_pii` to `handles_personal_data`, this assertion fails at PR time, not after a risky vendor gets the wrong review.
+
+## What this is
+
+<CardGroup cols={2}>
+  <Card title="CI validation" icon="check">
+    Fail pull requests when agent handoff payloads or tool outputs drift from the contract you declared.
+  </Card>
+  <Card title="Local trace assertions" icon="terminal">
+    Run in pytest with local trace files. No hosted service or production runtime layer is required.
+  </Card>
+</CardGroup>
+
+## What this is not
+
+<CardGroup cols={2}>
+  <Card title="Not runtime guardrails" icon="shield-x">
+    reagent-flow does not block live traffic, re-ask models, or enforce production policies.
+  </Card>
+  <Card title="Not semantic verification" icon="brain">
+    It checks declared contracts. It does not prove that every agent decision is correct.
+  </Card>
+</CardGroup>
 
 ## What you get
 
@@ -74,4 +102,8 @@ reagent-flow has a **zero-dependency core** with thin adapters for the major age
 
 <Card title="Get started" icon="rocket" href="/quickstart">
   Install reagent-flow and write your first contract test in under 5 minutes.
+</Card>
+
+<Card title="Why not guardrails?" icon="circle-help" href="/concepts/why-contract-testing">
+  See how reagent-flow fits alongside structured outputs, guardrails, evals, and observability.
 </Card>

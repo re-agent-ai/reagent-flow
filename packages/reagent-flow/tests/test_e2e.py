@@ -46,6 +46,28 @@ def test_golden_baseline_match(tmp_path: Path) -> None:
     s2.assert_matches_baseline()
 
 
+def test_golden_baseline_match_with_redacted_fields(tmp_path: Path) -> None:
+    """Redacted golden files compare against redacted actual traces."""
+    with reagent_flow.session(
+        "e2e_redacted_golden",
+        golden=True,
+        trace_dir=str(tmp_path),
+        redact_fields={"api_key"},
+    ) as s:
+        s.log_llm_call(tool_calls=[{"name": "lookup", "arguments": {"api_key": "secret"}}])
+        s.log_tool_result("lookup", result={"api_key": "secret", "ok": True})
+
+    with reagent_flow.session(
+        "e2e_redacted_golden",
+        trace_dir=str(tmp_path),
+        redact_fields={"api_key"},
+    ) as s2:
+        s2.log_llm_call(tool_calls=[{"name": "lookup", "arguments": {"api_key": "secret"}}])
+        s2.log_tool_result("lookup", result={"api_key": "secret", "ok": True})
+
+    s2.assert_matches_baseline()
+
+
 def test_golden_baseline_divergence(tmp_path: Path) -> None:
     # Record golden
     with reagent_flow.session("e2e_div", golden=True, trace_dir=str(tmp_path)) as s:

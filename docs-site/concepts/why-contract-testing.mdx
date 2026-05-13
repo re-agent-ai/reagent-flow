@@ -1,0 +1,50 @@
+---
+title: "Why Contract Testing?"
+description: "How reagent-flow differs from structured outputs, runtime guardrails, evals, and observability."
+---
+
+## The gap
+
+Structured outputs, guardrails, evals, and observability are useful. They just solve different parts of the agent reliability problem.
+
+reagent-flow focuses on one narrow failure: an upstream agent changes the payload shape, a downstream agent keeps going, and CI does not catch the broken boundary.
+
+In the vendor-onboarding showcase, the intake agent changes:
+
+```text
+data_access.contains_customer_pii -> handles_personal_data
+compliance.subprocessors          -> "AssemblyAI, BigQuery"
+```
+
+The downstream workflow can still run, but the security review is now reading incomplete data. reagent-flow fails the handoff contract before that drift ships.
+
+## What each tool class does
+
+| Tool class | What it is good at | What it does not prove |
+|------------|--------------------|-------------------------|
+| Structured outputs | Keep one model call in a requested shape | That the next agent received the payload it expects |
+| Runtime guardrails | Block or repair unsafe live behavior | That a PR preserved every agent boundary |
+| Observability and evals | Inspect traces, score runs, and debug production behavior | That a handoff contract fails in local pytest before merge |
+| reagent-flow | Validate handoff and tool-output contracts in CI | Semantic correctness or runtime enforcement |
+
+## What reagent-flow does
+
+- Records local traces during tests.
+- Links agent sessions with `parent_trace_id` and `handoff_context`.
+- Validates handoff payloads with `assert_handoff_matches`.
+- Validates tool results with `assert_tool_output_matches`.
+- Fails pytest with the exact field path that drifted.
+
+## What reagent-flow does not do
+
+- It is not a runtime guardrail.
+- It is not a hosted observability platform.
+- It does not prove semantic correctness.
+- It does not replace structured outputs.
+- It does not replace production safety controls.
+
+Use reagent-flow when you want agent-boundary failures to break a PR, not when you need a live production policy engine.
+
+<Card title="Add it to CI" icon="github" href="/advanced/ci">
+  Run reagent-flow contract tests in GitHub Actions.
+</Card>

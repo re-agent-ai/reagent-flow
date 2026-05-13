@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, cast
 
 FORMAT_VERSION = "1"
+REDACTED_VALUE = "[REDACTED]"
 
 
 @dataclass
@@ -73,9 +74,33 @@ class Trace:
     handoff_context: dict[str, Any] | None = None
 
 
-def trace_to_dict(trace: Trace) -> dict[str, Any]:
-    """Serialize a Trace to a dict."""
-    return asdict(trace)
+def trace_to_dict(trace: Trace, *, redact_fields: set[str] | None = None) -> dict[str, Any]:
+    """Serialize a Trace to a dict.
+
+    Args:
+        trace: Trace to serialize.
+        redact_fields: Optional dict key names to redact in the serialized copy.
+
+    """
+    data = asdict(trace)
+    if redact_fields:
+        return cast(dict[str, Any], _redact_keys(data, redact_fields))
+    return data
+
+
+def _redact_keys(value: Any, redact_fields: set[str]) -> Any:
+    """Return a copy with matching dictionary keys redacted recursively."""
+    if isinstance(value, dict):
+        redacted: dict[Any, Any] = {}
+        for key, item in value.items():
+            if isinstance(key, str) and key in redact_fields:
+                redacted[key] = REDACTED_VALUE
+            else:
+                redacted[key] = _redact_keys(item, redact_fields)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_keys(item, redact_fields) for item in value]
+    return value
 
 
 def trace_from_dict(d: dict[str, Any]) -> Trace:

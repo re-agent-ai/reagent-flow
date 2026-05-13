@@ -63,6 +63,23 @@ uv add reagent-flow-langgraph   # LangGraph
 uv add reagent-flow-crewai      # CrewAI
 ```
 
+## Trace Privacy
+
+reagent-flow stores traces locally in the configured `trace_dir`. Traces can include tool arguments, tool outputs, handoff payloads, and model responses.
+
+Use a temporary `trace_dir` in tests, keep `.reagent/` out of git, and avoid logging raw secrets or full customer payloads. For fields that should never be written to trace files, pass `redact_fields`:
+
+```python
+with reagent_flow.session(
+    "vendor-security-review",
+    trace_dir=".reagent",
+    redact_fields={"api_key", "customer_email"},
+) as s:
+    ...
+```
+
+Redaction only affects the saved `.trace.json` file. In-memory assertions still validate the original values.
+
 ## Quick Start
 
 Contract-test a two-agent handoff: the **intake agent** extracts a vendor
@@ -473,7 +490,7 @@ Requires [uv](https://docs.astral.sh/uv/) for package management.
 
 ```bash
 # Clone and setup
-git clone https://github.com/reagent-flow/reagent-flow.git
+git clone https://github.com/re-agent-ai/reagent-flow.git
 cd reagent-flow
 uv sync  # creates venv, installs all packages + dev deps
 
@@ -501,9 +518,9 @@ Traces are saved as plain JSON files containing the full tool call arguments and
 Before committing traces to version control or sharing them:
 - Review trace files for sensitive content
 - Add `.reagent/` to your `.gitignore` (golden baselines may be an exception if they contain only synthetic data)
-- Consider sanitizing tool inputs/outputs before logging if your agent handles real user data
+- Use `redact_fields` for keys that should never be written to saved trace files
 
-A built-in redaction framework is planned for a future release.
+Redaction affects saved `.trace.json` files only. In-memory assertions still validate the original values.
 
 ## Requirements
 

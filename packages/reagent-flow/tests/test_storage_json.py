@@ -71,6 +71,26 @@ def test_trace_file_is_valid_json(tmp_path: object) -> None:
     assert data["format_version"] == "1"
 
 
+def test_save_trace_redacts_sensitive_keys(tmp_path: object) -> None:
+    trace = _make_trace()
+    trace.handoff_context = {"api_key": "secret", "vendor_name": "ClearVoice AI"}
+    trace.turns[0].llm_call.tool_calls[0].arguments = {"api_key": "secret"}
+    trace.turns[0].tool_results[0].result = {
+        "ok": True,
+        "customer_email": "user@example.com",
+    }
+
+    save_trace(trace, str(tmp_path), redact_fields={"api_key", "customer_email"})
+
+    files = find_traces(str(tmp_path), "test_trace")
+    with open(files[0]) as f:
+        data = json.load(f)
+    assert data["handoff_context"]["api_key"] == "[REDACTED]"
+    assert data["handoff_context"]["vendor_name"] == "ClearVoice AI"
+    assert data["turns"][0]["llm_call"]["tool_calls"][0]["arguments"]["api_key"] == "[REDACTED]"
+    assert data["turns"][0]["tool_results"][0]["result"]["customer_email"] == "[REDACTED]"
+
+
 @pytest.mark.unit
 class TestSanitizeName:
     """Tests for path traversal prevention in trace name sanitization."""

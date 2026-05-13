@@ -1,6 +1,7 @@
 """Tests for reagent_flow.models."""
 
 from reagent_flow.models import (
+    REDACTED_VALUE,
     LLMCall,
     Message,
     ToolCall,
@@ -130,3 +131,26 @@ def test_handoff_roundtrip_serialization() -> None:
     restored = trace_from_dict(d)
     assert restored.parent_trace_id == "parent-456"
     assert restored.handoff_context == {"query": "earnings", "year": 2024}
+
+
+def test_trace_to_dict_redacts_matching_keys_without_mutating_trace() -> None:
+    """Serialization can redact sensitive keys while keeping the trace intact."""
+    trace = Trace(
+        trace_id="t1",
+        name="test",
+        handoff_context={
+            "vendor_name": "ClearVoice AI",
+            "api_key": "secret",
+            "nested": {"email": "user@example.com"},
+        },
+    )
+
+    data = trace_to_dict(trace, redact_fields={"api_key", "email"})
+
+    assert data["handoff_context"]["api_key"] == REDACTED_VALUE
+    assert data["handoff_context"]["nested"]["email"] == REDACTED_VALUE
+    assert trace.handoff_context == {
+        "vendor_name": "ClearVoice AI",
+        "api_key": "secret",
+        "nested": {"email": "user@example.com"},
+    }
