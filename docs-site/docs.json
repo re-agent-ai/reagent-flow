@@ -7,7 +7,6 @@
     "light": "#9FE1CB",
     "dark": "#04342C"
   },
-  "favicon": "/favicon.svg",
   "navigation": {
     "groups": [
       {
@@ -77,7 +76,7 @@
     "thumbsRating": true
   },
   "search": {
-    "prompt": "Search reagent-flow docs..."
+    "prompt": "Search docs"
   },
   "seo": {
     "indexHiddenPages": false
