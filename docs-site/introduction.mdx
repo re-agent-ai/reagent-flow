@@ -3,10 +3,6 @@ title: "Introduction"
 description: "Contract testing for multi-agent handoffs. pytest-native assertions that catch schema drift, broken handoffs, and tool-output regressions before they ship."
 ---
 
-# reagent-flow
-
-**CI contract testing for multi-agent handoffs.** pytest-native assertions that catch schema drift, broken handoffs, and tool-output regressions *before* they ship.
-
 ## The problem
 
 Multi-agent systems fail at the seams. One agent hands structured data to the next, and the second agent keeps running even when the shape is subtly wrong: a renamed field, a missing key, or a string where a list was expected.
