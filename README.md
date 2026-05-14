@@ -1,575 +1,193 @@
 # reagent-flow
 
-**Contract testing for multi-agent handoffs.** pytest-native assertions that catch schema drift, broken handoffs, and tool-output regressions _before_ they ship.
+**_Contract testing for multi-agent handoffs._**
 
-```bash
-uv add reagent-flow
-cd examples/vendor_onboarding_showcase
-uv run python showcase.py
-```
+Catch schema drift, broken handoffs, and tool-output regressions in your test suite — not in production. Pytest-native, zero-dependency core, with thin adapters for OpenAI, Anthropic, LangChain, LangGraph, and CrewAI.
 
-## Why reagent-flow?
+**[Documentation](https://reagent-ai.mintlify.app)** ·
+**[Quickstart](https://reagent-ai.mintlify.app/quickstart)** ·
+**[Vendor Onboarding showcase](https://reagent-ai.mintlify.app/examples/vendor-onboarding)** ·
+**[Discussions](https://github.com/re-agent-ai/reagent-flow/discussions)** ·
+**[Changelog](CHANGELOG.md)**
 
-Multi-agent systems fail at the seams. One agent hands structured data to the next, and the second agent keeps going even when the shape is subtly wrong — a renamed field, a missing key, a string where a list was expected. The LLM papers over it, the tests pass, and the bug shows up later as a confident but wrong decision.
+---
 
-**reagent-flow** treats every handoff as a contract and every tool call as a typed boundary. You declare the schema you expect; reagent-flow records what actually flowed and fails the test when they diverge — with an **Agent Stack Trace** pinpointing the exact field that drifted.
+## What it looks like
 
-Structured outputs keep one LLM call honest. Runtime guardrails keep one response safe. reagent-flow tests whether the boundary between two agent sessions still holds in CI.
-
-See the docs page on [why contract testing](https://reagent-ai.mintlify.app/concepts/why-contract-testing) for how this fits alongside structured outputs, guardrails, evals, and observability.
+**Vendor Onboarding** example — a multi-agent approval workflow where an intake agent extracts a structured vendor packet and hands it to downstream security, finance, and approval agents. Declare the packet shape once as a contract:
 
 ```python
-# Security receives a handoff from the intake agent. This is the contract:
-security_session.assert_handoff_matches(schema={
+VENDOR_PACKET_SCHEMA = {
     "vendor_name": str,
     "data_access": {
         "contains_customer_pii": bool,
         "data_categories": [str],
+        "storage_region": str,
+        "retention_days": int,
     },
-    "compliance": {"subprocessors": [str]},
-})
+    "compliance": {
+        "soc2_available": bool,
+        "dpa_required": bool,
+        "subprocessors": [str],
+    },
+}
+
+security.assert_handoff_matches(schema=VENDOR_PACKET_SCHEMA)
 ```
 
-If the upstream agent renames `contains_customer_pii` or changes
-`subprocessors` from a list to a string, this assertion fails at PR time, not
-after an AI approval workflow clears a risky vendor.
-
-### What you get
-
-- **Handoff contracts** — type-check the data passed between agents, with nested dicts, typed lists, and optional Pydantic support.
-- **Tool output contracts** — validate the shape of every tool's return value, catching upstream API drift before the downstream agent sees it.
-- **Context preservation checks** — verify specific values (IDs, versions, user refs) survive multi-hop handoffs unchanged.
-- **Flow and count assertions** — guarantee the tool-calling sequence you expect (order, repetition, forbidden calls).
-- **Golden baseline diffs** — snapshot-test known-good traces and detect behavioral regressions from prompt tweaks.
-- **Agent Stack Traces** — every failed assertion attaches a readable dump of the full tool-calling history.
-- **Zero-dependency core** with thin adapters for OpenAI, Anthropic, LangChain, LangGraph, and CrewAI.
-
-## Product Showcase
-
-The clearest walkthrough is the deterministic vendor-onboarding showcase. No API key is required.
-
-```bash
-cd examples/vendor_onboarding_showcase
-uv run python showcase.py
-```
-
-It shows a realistic AI approval workflow:
+When the intake agent's tool drifts — say `contains_customer_pii` is renamed to `handles_personal_data` — the contract fails at the very next boundary, before the security review keeps going on incomplete data:
 
 ```text
-Intake Agent -> Security Review Agent
-             -> Finance Review Agent
-             -> Approval Agent
+FAILED test_vendor_onboarding_security_review
+  AssertionError: handoff field 'data_access.contains_customer_pii': missing from data
+
+  AGENT STACK TRACE — security
+  ─────────────────────────────────────────────────────────────
+  parent: intake (a1f2…)
+  handoff_context = {
+      "vendor_name": "ClearVoice AI",
+      "data_access": {
+          "handles_personal_data": true,   ← drift
+          "data_categories": ["call_audio", "transcripts"],
+          "storage_region": "us-east-1",
+          "retention_days": 365
+      },
+      ...
+  }
+
+  Turn 0  assess_security_risk(vendor_name="ClearVoice AI")
+       ↳ {"risk": "blocked: missing PII flag"}
+  ─────────────────────────────────────────────────────────────
 ```
 
-The intake agent drifts a vendor packet for a customer-call transcription tool:
-`data_access.contains_customer_pii` is renamed and `compliance.subprocessors`
-changes from a list to a string. The security agent would mark the vendor LOW
-risk and the approval agent would approve it, but reagent-flow fails the
-handoff contract first:
+Read the full walkthrough on the docs site:
+[**reagent-ai.mintlify.app/examples/vendor-onboarding**](https://reagent-ai.mintlify.app/examples/vendor-onboarding)
 
-```text
-ASSERTION FAILED: handoff field 'data_access.contains_customer_pii': missing from data
-```
+---
 
-See [examples/vendor_onboarding_showcase](examples/vendor_onboarding_showcase/)
-for the deterministic no-API-key demo, tests, and Excalidraw diagram.
+## Where reagent-flow fits
 
-## Installation
+| Adjacent tool / approach                 | What it does                                   | Where reagent-flow is different                                       |
+| :--------------------------------------- | :--------------------------------------------- | :-------------------------------------------------------------------- |
+| **Pydantic AI / structured outputs**     | Validates a single LLM call's output shape.    | Validates the data passed _between_ agents, across multiple sessions. |
+| **Guardrails / runtime guards**          | Blocks bad output at runtime, in production.   | Catches it in your test suite, before the PR merges.                  |
+| **LangSmith / Langfuse / observability** | Records traces for post-hoc inspection.        | Records _and_ asserts — your CI fails on drift.                       |
+| **LLM evals**                            | Scores model output quality on a dataset.      | Asserts deterministic structural contracts on every test run.         |
+| **pytest-mock for agents**               | Mocks tool calls so tests don't hit live LLMs. | Captures real or mock traces and asserts on their shape.              |
+
+**Use reagent-flow when you have:**
+
+- Multi-agent or multi-step pipelines passing structured data between sessions
+- A pytest suite where you want CI to fail on handoff drift before merge
+- Tool outputs whose shape your downstream agents silently depend on
+
+**Reach for something else when:**
+
+- You only need to validate a single LLM call's output → use Pydantic directly
+- You need to block bad output at runtime in production → use a guardrails library
+- You need accuracy or quality scoring on a dataset → use an evals framework
+
+---
+
+## What's in this monorepo
+
+The core library plus five framework adapters, each a separate installable package:
+
+| Package                  | Version | Purpose                                              | Docs                                                                     |
+| :----------------------- | :------ | :--------------------------------------------------- | :----------------------------------------------------------------------- |
+| `reagent-flow`           | 0.5.0   | Core: sessions, traces, assertions, golden baselines | [Concepts](https://reagent-ai.mintlify.app/concepts/sessions-and-traces) |
+| `reagent-flow-openai`    | 0.2.0   | OpenAI Python SDK adapter                            | [OpenAI](https://reagent-ai.mintlify.app/adapters/openai)                |
+| `reagent-flow-anthropic` | 0.2.0   | Anthropic Python SDK adapter                         | [Anthropic](https://reagent-ai.mintlify.app/adapters/anthropic)          |
+| `reagent-flow-langchain` | 0.2.0   | LangChain callback handler                           | [LangChain](https://reagent-ai.mintlify.app/adapters/langchain)          |
+| `reagent-flow-langgraph` | 0.2.0   | LangGraph callback (extends LangChain)               | [LangGraph](https://reagent-ai.mintlify.app/adapters/langgraph)          |
+| `reagent-flow-crewai`    | 0.2.0   | CrewAI tool wrapper                                  | [CrewAI](https://reagent-ai.mintlify.app/adapters/crewai)                |
+
+**Runnable examples** under [`examples/`](examples/):
+
+- [`langgraph_demo/`](examples/langgraph_demo/) — three-agent LangGraph pipeline (Gatherer → Assessor → Decider) that runs end-to-end and demonstrates a broken handoff being caught at the assessor boundary.
+- [`manual_logging/`](examples/manual_logging/) — minimal refund flow using explicit `log_llm_call` / `log_tool_result`, no framework adapter required.
+
+---
+
+## Install
 
 ```bash
-uv add reagent-flow
+uv add reagent-flow                # core, zero runtime deps
+uv add reagent-flow-openai         # +OpenAI
+uv add reagent-flow-anthropic      # +Anthropic
+uv add reagent-flow-langchain      # +LangChain
+uv add reagent-flow-langgraph      # +LangGraph
+uv add reagent-flow-crewai         # +CrewAI
 ```
 
-### Framework Adapters
+Python 3.10+. Each adapter depends only on its respective framework.
 
-Install only the adapters you need:
+**Next:** write your first contract test in 5 minutes →
+[**reagent-ai.mintlify.app/quickstart**](https://reagent-ai.mintlify.app/quickstart)
 
-```bash
-uv add reagent-flow-openai      # OpenAI
-uv add reagent-flow-anthropic   # Anthropic
-uv add reagent-flow-langchain   # LangChain
-uv add reagent-flow-langgraph   # LangGraph
-uv add reagent-flow-crewai      # CrewAI
-```
+---
 
-## Trace Privacy
+## Status & roadmap
 
-reagent-flow stores traces locally in the configured `trace_dir`. Traces can include tool arguments, tool outputs, handoff payloads, and model responses.
+**Current release:** `reagent-flow 0.5.0`, adapters `0.2.0`. &nbsp; **Stability:** alpha.
 
-Use a temporary `trace_dir` in tests, keep `.reagent/` out of git, and avoid logging raw secrets or full customer payloads. For fields that should never be written to trace files, pass `redact_fields`:
+**Stable today** (full reference on the [docs site](https://reagent-ai.mintlify.app)):
 
-```python
-with reagent_flow.session(
-    "vendor-security-review",
-    trace_dir=".reagent",
-    redact_fields={"api_key", "customer_email"},
-) as s:
-    ...
-```
+- Handoff contracts, tool-output contracts, context preservation
+- Flow, count, and ordering assertions
+- Nested schemas — typed lists, list-of-dicts, optional Pydantic `BaseModel` support
+- Golden-baseline diffs with `ignore_fields`
+- Token and cost guards with per-model pricing
+- Agent Stack Traces attached to every failed assertion
+- Five framework adapters with automatic tool-result capture
+- pytest plugin: fixtures, marker, CLI flags
 
-Redaction only affects the saved `.trace.json` file. In-memory assertions still validate the original values.
+**Planned next:**
 
-## Key Concepts
+- Built-in trace redaction framework (for traces that may carry PII or secrets)
+- Additional adapters as the community requests them
 
-| Concept               | Description                                                                                                                                              |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session**           | A context manager that records tool calls for one agent run; may declare a `parent_trace_id` and `handoff_context` to form a link in a multi-agent chain |
-| **Handoff context**   | The structured payload passed from one agent session to the next — the target of contract assertions                                                     |
-| **Trace**             | The full sequence of turns captured during a session                                                                                                     |
-| **Contract**          | A declared schema (`{field: type}`) validated against a handoff or tool result                                                                           |
-| **Golden baseline**   | A saved trace used as the expected behavior for future runs                                                                                              |
-| **Agent Stack Trace** | A readable dump of every turn, attached to assertion failures                                                                                            |
+**Versioning:** while on `0.x`, minor versions may include breaking changes. `1.0` will lock the public assertion API. See [`CHANGELOG.md`](CHANGELOG.md) for what shipped when.
 
-## Quick Start
+---
 
-Contract-test a two-agent handoff: the **intake agent** extracts a vendor
-packet, and the **security agent** consumes it. reagent-flow validates the
-shape of what flows between them.
+## Community
 
-```python
-import reagent_flow
+Questions, ideas, war stories about multi-agent handoffs going wrong — all welcome.
 
+- **[GitHub Discussions](https://github.com/re-agent-ai/reagent-flow/discussions)** — Q&A, design conversations, show-and-tell
+- **[GitHub Issues](https://github.com/re-agent-ai/reagent-flow/issues)** — bug reports and feature requests
+- **[`CONTRIBUTING.md`](CONTRIBUTING.md)** — dev setup, conventions, the 90 % coverage gate
+- **[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)** — Contributor Covenant 2.0
 
-def test_vendor_onboarding(tmp_path):
-    trace_dir = str(tmp_path)
+Looking to contribute? Start with the [`good first issue`](https://github.com/re-agent-ai/reagent-flow/labels/good%20first%20issue) label.
 
-    vendor_packet = {
-        "vendor_name": "ClearVoice AI",
-        "data_access": {
-            "contains_customer_pii": True,
-            "data_categories": ["call_recordings", "email_addresses"],
-        },
-        "compliance": {"subprocessors": ["AcmeCloud", "VectorStore Inc"]},
-    }
-
-    # Phase 1 — intake agent records the vendor packet
-    with reagent_flow.session("vendor-intake", trace_dir=trace_dir) as intake:
-        intake.log_llm_call(
-            tool_calls=[{"name": "extract_vendor_packet", "arguments": {"request_id": "VR-42"}}],
-        )
-        intake.log_tool_result("extract_vendor_packet", result=vendor_packet)
-
-    # Contract on the tool output
-    intake.assert_tool_output_matches("extract_vendor_packet", schema={
-        "vendor_name": str,
-        "data_access": {
-            "contains_customer_pii": bool,
-            "data_categories": [str],
-        },
-        "compliance": {"subprocessors": [str]},
-    })
-
-    # Phase 2 — security receives the intake output as a handoff
-    with reagent_flow.session(
-        "vendor-security-review",
-        trace_dir=trace_dir,
-        parent_trace_id=intake.trace.trace_id,
-        handoff_context=vendor_packet,
-    ) as security:
-        security.log_llm_call(
-            tool_calls=[{"name": "review_security", "arguments": {"vendor": "ClearVoice AI"}}],
-        )
-        security.log_tool_result("review_security", result={"security_risk": "HIGH"})
-
-    # Contract on the handoff itself — this is where multi-agent systems break
-    security.assert_handoff_received(intake)
-    security.assert_handoff_matches(schema={
-        "vendor_name": str,
-        "data_access": {
-            "contains_customer_pii": bool,
-            "data_categories": [str],
-        },
-        "compliance": {"subprocessors": [str]},
-    })
-    security.assert_context_preserved({"vendor_name": "ClearVoice AI"}, fields=["vendor_name"])
-```
-
-If an upstream change renames `contains_customer_pii`,
-`assert_handoff_matches` fails with the exact path
-(`handoff field 'data_access.contains_customer_pii': missing from data`)
-attached to an Agent Stack Trace.
-
-### Async Support
-
-Sessions work as both sync and async context managers:
-
-```python
-async def test_async_agent():
-    async with reagent_flow.session("async_flow", trace_dir=".reagent") as s:
-        s.log_llm_call(tool_calls=[{"name": "search", "arguments": {"q": "test"}}])
-        s.log_tool_result("search", result={"found": True})
-    s.assert_called("search")
-```
-
-## Assertions
-
-| Method                                      | Description                                      |
-| ------------------------------------------- | ------------------------------------------------ |
-| `assert_called(tool)`                       | Tool was called at least once                    |
-| `assert_never_called(tool)`                 | Tool was never called                            |
-| `assert_called_before(a, b)`                | Tool `a` was called before tool `b` (positional) |
-| `assert_tool_succeeded(tool)`               | Tool was called and all executions succeeded     |
-| `assert_max_turns(n)`                       | Trace has at most `n` turns                      |
-| `assert_total_duration_under(ms=N)`         | Total trace duration under `N` ms                |
-| `assert_matches_baseline()`                 | Trace matches its golden baseline                |
-| `assert_flow(pattern)`                      | Tool calls match a flow pattern (see below)      |
-| `assert_called_times(tool, min=, max=)`     | Tool was called between `min` and `max` times    |
-| `assert_called_with(tool, **args)`          | Tool was called with specific argument values    |
-| `assert_handoff_received(parent)`           | Session is linked to a parent session            |
-| `assert_handoff_has_fields(fields)`         | Required fields exist in handoff context         |
-| `assert_total_tokens_under(n)`              | Total token usage across all turns is under `n`  |
-| `assert_cost_under(usd=, model_costs=)`     | Estimated cost is under a USD limit              |
-| `assert_handoff_matches(schema=)`           | Handoff context matches a `{field: type}` schema |
-| `assert_no_extra_fields(allowed=)`          | Handoff context has no unexpected fields         |
-| `assert_tool_output_matches(tool, schema=)` | Tool results match a `{field: type}` schema      |
-| `assert_context_preserved(source, fields=)` | Specific values survived a handoff unchanged     |
-
-## Golden Baselines
-
-Record a golden trace, then assert future runs match:
-
-```python
-# Record golden baseline
-with reagent_flow.session("flow", golden=True, trace_dir=".reagent") as s:
-    run_agent(s)
-
-# Later — assert actual matches golden
-with reagent_flow.session("flow", trace_dir=".reagent") as s:
-    run_agent(s)
-s.assert_matches_baseline()
-```
-
-Golden baselines are stored as JSON at `{trace_dir}/golden/{name}.trace.json`. When `assert_matches_baseline()` fails, the diff output shows exactly which tools, arguments, or results changed.
-
-Use `ignore_fields` to skip noisy fields that change between runs:
-
-```python
-s.assert_matches_baseline(ignore_fields={"results", "response_text"})
-s.assert_matches_baseline(ignore_fields={"lookup.timestamp", "arguments"})
-```
-
-Supported values: `"arguments"` (all args), `"results"` (all results), `"response_text"`, or specific keys like `"tool_name.arg_key"`.
-
-## Flow Patterns
-
-`assert_flow` matches tool calls against a pattern with optional gaps using `...` (Ellipsis). Patterns are anchored to start and end by default:
-
-```python
-# Exact consecutive match
-s.assert_flow(["search", "summarize"])
-
-# Allow any calls between search and summarize
-s.assert_flow(["search", ..., "summarize"])
-
-# Unanchored — match anywhere in the trace
-s.assert_flow([..., "search", ..., "summarize", ...])
-```
-
-## Handoff Integrity
-
-Track parent-child relationships between agent sessions:
-
-```python
-with reagent_flow.session("orchestrator") as parent:
-    parent.log_llm_call(tool_calls=[{"name": "plan", "arguments": {}}])
-    parent.log_tool_result("plan", result="ok")
-
-with reagent_flow.session(
-    "researcher",
-    parent_trace_id=parent.trace.trace_id,
-    handoff_context={"query": "Q3 earnings"},
-) as child:
-    child.log_llm_call(tool_calls=[{"name": "search", "arguments": {}}])
-    child.log_tool_result("search", result="ok")
-
-child.assert_handoff_received(parent)
-child.assert_handoff_has_fields(["query"])
-```
-
-## Contract Testing
-
-Validate the structure and types of data flowing between agents:
-
-```python
-# Type-check handoff context fields
-child.assert_handoff_matches(schema={"user_id": str, "query": str, "limit": int})
-
-# Detect unexpected fields leaking through handoffs
-child.assert_no_extra_fields(allowed=["user_id", "query", "limit"])
-
-# Validate tool output structure
-s.assert_tool_output_matches("search", schema={"results": list, "count": int})
-
-# Verify values survived a handoff unchanged
-source = {"user_id": "abc123", "query": "revenue Q4"}
-child.assert_context_preserved(source, fields=["user_id", "query"])
-```
-
-**Strict bool/int separation:** A field declared as `int` rejects `True`/`False`, and `bool` rejects `0`/`1`. Python's `bool` subclasses `int`, but contract assertions distinguish them.
-
-### Nested Schemas
-
-`assert_handoff_matches` and `assert_tool_output_matches` support nested structures:
-
-```python
-# Nested dict
-s.assert_handoff_matches(schema={
-    "user": {"id": str, "name": str},
-    "query": str,
-})
-
-# Typed list
-s.assert_handoff_matches(schema={"tags": [str]})
-
-# Union typed list
-s.assert_handoff_matches(schema={"values": [str, int]})
-
-# List of dicts
-s.assert_tool_output_matches("search", schema={
-    "results": [{"id": str, "score": float, "title": str}],
-    "total": int,
-})
-```
-
-Error messages include dot/bracket path notation:
-
-- `"handoff field 'user.name': expected str, got int"`
-- `"handoff field 'tags[2]': expected str, got int"`
-- `"handoff field 'results[0].score': expected float, got str"`
-
-#### Optional Pydantic Support
-
-When Pydantic is installed, pass a `BaseModel` subclass instead of a dict schema:
-
-```python
-from pydantic import BaseModel
-
-class HandoffSchema(BaseModel):
-    user_id: str
-    query: str
-    tags: list[str]
-
-child.assert_handoff_matches(schema=HandoffSchema)
-```
-
-Pydantic is never imported at module level — detection is purely runtime. Users without Pydantic get identical behavior using dict schemas.
-
-## Token and Cost Guards
-
-Guard against runaway token usage or unexpected costs:
-
-```python
-# Assert total tokens across all turns
-s.assert_total_tokens_under(50_000)
-
-# Assert estimated cost with per-model pricing (USD per 1M tokens)
-s.assert_cost_under(
-    usd=1.00,
-    model_costs={
-        "gpt-4o": {"input": 2.50, "output": 10.00},
-        "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    },
-)
-```
-
-Model names are matched by longest prefix, so `"gpt-4o"` matches `"gpt-4o-2024-08-06"`.
-
-## Agent Stack Traces
-
-When an assertion fails, reagent-flow attaches a readable stack trace showing every turn, tool call, and result:
-
-```
-AGENT STACK TRACE — refund_flow
-================================
-Turn 0: lookup_order(order_id="123")
-  → {"status": "active", "amount": 49.99}
-Turn 1: process_refund(order_id="123", amount=49.99)
-  → {"success": true}
-Turn 2: [text response] "Refund processed."
-================================
-✗ "delete_account" was never called (3 turns, 2 tool calls)
-```
-
-## pytest Integration
-
-reagent-flow ships as a pytest plugin (auto-loaded via entry point). It provides CLI flags, fixtures, and a marker.
-
-### CLI Flags
-
-```bash
-pytest --reagent-record       # Set metadata flag for live recording
-pytest --reagent-update       # Re-record golden baselines
-pytest --reagent-dir=.reagent  # Override trace directory (default: .reagent)
-```
-
-### Fixtures
-
-| Fixture           | Type      | Description                                                                                                   |
-| ----------------- | --------- | ------------------------------------------------------------------------------------------------------------- |
-| `reagent_session` | `Session` | A managed session that reads all CLI flags, applies the `@pytest.mark.reagent` marker, and auto-saves on exit |
-| `reagent_dir`     | `str`     | The `--reagent-dir` value                                                                                     |
-| `reagent_record`  | `bool`    | Whether `--reagent-record` was passed                                                                         |
-| `reagent_update`  | `bool`    | Whether `--reagent-update` was passed                                                                         |
-
-### Examples
-
-Using the `reagent_session` fixture (recommended):
-
-```python
-def test_refund_flow(reagent_session):
-    reagent_session.log_llm_call(
-        tool_calls=[{"name": "lookup_order", "arguments": {"id": "123"}}],
-    )
-    reagent_session.log_tool_result("lookup_order", result={"status": "active"})
-    reagent_session.assert_called("lookup_order")
-```
-
-Recording a golden baseline:
-
-```python
-@pytest.mark.reagent(golden=True)
-def test_refund_golden(reagent_session):
-    run_agent(reagent_session)
-```
-
-Or update all goldens at once with `pytest --reagent-update`.
-
-Manual session management still works:
-
-```python
-def test_refund_manual(tmp_path):
-    with reagent_flow.session("refund", trace_dir=str(tmp_path)) as s:
-        run_agent(s)
-    s.assert_matches_baseline()
-```
-
-## Framework Adapters
-
-### OpenAI
-
-```python
-from openai import OpenAI
-from reagent_flow_openai import patch
-import reagent_flow
-
-client = patch(OpenAI())
-
-with reagent_flow.session("chat") as s:
-    client.chat.completions.create(model="gpt-4o", messages=[...], tools=[...])
-
-s.assert_called("my_tool")
-```
-
-The `patch()` function wraps `chat.completions.create` to log every LLM turn into the active session. Tool results you send back on the next `create()` call (as `{"role": "tool", "tool_call_id": ..., "content": ...}` messages) are automatically attached to the turn that requested them, so `assert_tool_output_matches` and the other tool-output contracts work end-to-end. JSON-encoded tool content is decoded before validation.
-
-### Anthropic
-
-```python
-from anthropic import Anthropic
-from reagent_flow_anthropic import patch
-import reagent_flow
-
-client = patch(Anthropic())
-
-with reagent_flow.session("chat") as s:
-    client.messages.create(model="claude-sonnet-4-20250514", messages=[...], tools=[...], max_tokens=1024)
-
-s.assert_called("my_tool")
-```
-
-The `patch()` function wraps `messages.create` to log `tool_use` content blocks on each turn. Tool results you thread back on the next `messages.create` call (as user messages whose `content` is a list of `{"type": "tool_result", "tool_use_id": ..., "content": ...}` blocks) are automatically attached to the turn that requested them, so `assert_tool_output_matches` works end-to-end. JSON-encoded tool content is decoded before validation.
-
-### LangChain
-
-```python
-from reagent_flow_langchain import ReagentCallbackHandler
-import reagent_flow
-
-handler = ReagentCallbackHandler()
-
-with reagent_flow.session("chain") as s:
-    chain.invoke({"input": "..."}, config={"callbacks": [handler]})
-
-s.assert_called("my_tool")
-```
-
-### LangGraph
-
-```python
-from reagent_flow_langgraph import ReagentGraphTracer
-import reagent_flow
-
-tracer = ReagentGraphTracer()
-
-with reagent_flow.session("graph") as s:
-    graph.invoke({"input": "..."}, config={"callbacks": [tracer]})
-
-s.assert_called("my_tool")
-```
-
-Extends the LangChain handler with graph node tracking.
-
-### CrewAI
-
-```python
-from reagent_flow_crewai import instrument
-import reagent_flow
-
-crew = instrument(my_crew)
-
-with reagent_flow.session("crew") as s:
-    crew.kickoff()
-
-s.assert_called("my_tool")
-```
-
-The `instrument()` function wraps all agent tools to capture calls and results into the active session.
+---
 
 ## Development
 
-Requires [uv](https://docs.astral.sh/uv/) for package management.
+Requires [uv](https://docs.astral.sh/uv/).
 
 ```bash
-# Clone and setup
 git clone https://github.com/re-agent-ai/reagent-flow.git
-cd reagent-flow
-uv sync  # creates venv, installs all packages + dev deps
-
-# Run tests
+cd reagent-flow && uv sync
 uv run pytest packages/ -v
-
-# Run tests with coverage
-uv run coverage run -m pytest packages/
-uv run coverage report
-
-# Lint and format
-uv run ruff check packages/ examples/
-uv run ruff format --check packages/ examples/
-
-# Type check
+uv run ruff check packages/ examples/ && uv run ruff format --check packages/ examples/
 uv run mypy packages/reagent-flow/src/reagent_flow/ --strict
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+For architecture notes and contribution guidelines see [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Security & Privacy
+---
 
-Traces are saved as plain JSON files containing the full tool call arguments and results from your agent runs. **This may include sensitive data** such as API keys, user PII, database contents, or any other values your tools handle.
+## Security & privacy
 
-Before committing traces to version control or sharing them:
+Traces are plain JSON containing the full tool-call arguments and results from your agent runs — **this may include sensitive data**: API keys, user PII, database contents, anything your tools touch. Review before committing and add `.reagent/` to `.gitignore` unless you're confident the contents are synthetic. A built-in redaction framework is on the roadmap.
 
-- Review trace files for sensitive content
-- Add `.reagent/` to your `.gitignore` (golden baselines may be an exception if they contain only synthetic data)
-- Use `redact_fields` for keys that should never be written to saved trace files
+For vulnerability disclosure see [`SECURITY.md`](SECURITY.md).
 
-Redaction affects saved `.trace.json` files only. In-memory assertions still validate the original values.
-
-## Requirements
-
-- Python 3.10+
-- Zero runtime dependencies (core library)
-- Adapters depend only on their respective framework
+---
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) · [github.com/re-agent-ai/reagent-flow](https://github.com/re-agent-ai/reagent-flow)
